@@ -8,5 +8,6 @@
 
                  [edu.stanford.nlp/stanford-corenlp "3.9.2"]
                  [edu.stanford.nlp/stanford-corenlp "3.9.2"
-                  :classifier "models"]]
+                  :classifier "models"]
+                 [org.slf4j/slf4j-simple "1.7.28"]]
   :repl-options {:init-ns nlp.core})

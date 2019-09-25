@@ -1,8 +1,11 @@
 (ns nlp.core
- ;; (:require
- ;;   [medley.core :refer [find-first]]
- ;;   [clojure.reflect :refer [reflect]])
+ (:require
+  [clojure.string :refer [join]]
+  [medley.core :refer [find-first]]
+  ;;[clojure.reflect :refer [reflect]]
+  )
   (:import
+   [java.util Properties]
    [clojure.lang Reflector]
    ;;[clojure.reflect Constructor]
    ;;clojure.lang.Reflector
@@ -19,6 +22,7 @@
    ;;[edu.stanford.nlp.international.spanish.process SpanishTokenizer]
 
    [edu.stanford.nlp.ling CoreLabel TaggedWord Word]
+   [edu.stanford.nlp.pipeline Annotation StanfordCoreNLP]
    )
   (:gen-class :main true))
 
@@ -28,7 +32,7 @@
 
 (defn java-class->simple-name [cls]
   (.getSimpleName cls))
-
+#_
 (defn find-new-tokenizer [clss]
   (filter #(= (str "new" (java-class->simple-name clss))
               (name (:name %)))
@@ -130,20 +134,22 @@
       (when (not (or parse? dparse?))
         (throw (Exception. "One of parse or depparse is required"))))))
 
-(defn- check-coref-dependeny [args]
-  (%check-parse-dependeny-when-opt args :coref))
+(defn- maybe-check-coref-dependeny [args]
+  (when (find-in-coll args :coref)
+    (%check-parse-dependeny-when-opt args :coref)))
 
-(defn- check-kbp-dependency [args]
-  (%check-parse-dependeny-when-opt args :kbp)
-  (when-not (find-in-coll args :coref)
-    (throw (Exception. "Option :coref is required"))))
+(defn- maybe-check-kbp-dependency [args]
+  (when (find-in-coll args :kbp)
+    (%check-parse-dependeny-when-opt args :kbp)
+    (when-not (find-in-coll args :coref)
+      (throw (Exception. "Option :coref is required")))))
 
-(defn make-pipeline-properties
+(defn make-annotators-opts
   ([args]
    ;; Special case checking
-   (check-coref-dependeny args)
-   (check-kbp-dependency args)
-   (make-pipeline-properties args []))
+   (maybe-check-coref-dependeny args)
+   (maybe-check-kbp-dependency args)
+   (make-annotators-opts args []))
   ([[k & more-ks] result]
    (if (nil? k)
      (distinct result)
@@ -151,8 +157,10 @@
        (recur more-ks (into result (conj opts-found (name k))))
        (throw (Exception. (str "Unknown key: " k "!")))))))
 
-(defn make-pipeline [& args]
-  (StanfordCoreNLP. (make-pipeline-properties args) true))
+(defn make-pipeline [& annotators-args]
+  (StanfordCoreNLP. (doto (Properties.)
+                      (.put "annotators" (join \, (make-annotators-opts annotators-args))))
+                    true))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -171,7 +179,5 @@
 ;;             (= (class m) Constructor))
 ;;           (:members (reflect clss))))
 
-(defn make-text-tokenizer [k text]
-  ((key->tokenizer k) text))
 
 
