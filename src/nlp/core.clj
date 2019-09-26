@@ -21,7 +21,11 @@
    ;;[edu.stanford.nlp.ie.machinereading.domains.ace.reader RobustTokenizer]
    ;;[edu.stanford.nlp.international.spanish.process SpanishTokenizer]
 
-   [edu.stanford.nlp.ling CoreLabel TaggedWord Word]
+   [edu.stanford.nlp.ling  CoreAnnotations$SentencesAnnotation
+    CoreAnnotations$TextAnnotation
+    CoreAnnotations$NamedEntityTagAnnotation
+    CoreAnnotations$TokensAnnotation
+    Word]
    [edu.stanford.nlp.pipeline Annotation StanfordCoreNLP]
    )
   (:gen-class :main true))
@@ -67,27 +71,35 @@
   {:ptb-word {:class PTBTokenizer :args-fn (partial %make-ptb-tokenizer-args :ptb-word)}
    :ptb-core-label {:class PTBTokenizer :args-fn (partial %make-ptb-tokenizer-args :ptb-core-label)}})
 
-;; "americanize,normalizeAmpersandEntity=false"
-;;     normalizeOtherBrackets: Whether to map other common bracket characters to -LCB-, -LRB-, -RCB-, -RRB-, roughly as in the Penn Treebank. Default is true.
-;;     asciiQuotes: Whether to map all quote characters to the traditional ' and ". Default is false.
-;;     latexQuotes: Whether to map quotes to ``, `, ', '', as in Latex and the PTB3 WSJ (though this is now heavily frowned on in Unicode). If true, this takes precedence over the setting of unicodeQuotes; if both are false, no mapping is done. Default is true.
-;;     unicodeQuotes: Whether to map quotes to the range U+2018 to U+201D, the preferred unicode encoding of single and double quotes. Default is false.
-;;     ptb3Ellipsis: Whether to map ellipses to three dots (...), the old PTB3 WSJ coding of an ellipsis. If true, this takes precedence over the setting of unicodeEllipsis; if both are false, no mapping is done. Default is true.
-;;     unicodeEllipsis: Whether to map dot and optional space sequences to U+2026, the Unicode ellipsis character. Default is false.
-;;     ptb3Dashes: Whether to turn various dash characters into "--", the dominant encoding of dashes in the PTB3 WSJ. Default is true.
-;;     keepAssimilations: true to tokenize "gonna", false to tokenize "gon na". Default is true.
-;;     escapeForwardSlashAsterisk: Whether to put a backslash escape in front of / and * as the old PTB3 WSJ does for some reason (something to do with Lisp readers??). Default is true.
-;;     untokenizable: What to do with untokenizable characters (ones not known to the tokenizer). Six options combining whether to log a warning for none, the first, or all, and whether to delete them or to include them as single character tokens in the output: noneDelete, firstDelete, allDelete, noneKeep, firstKeep, allKeep. The default is "firstDelete".
-;;     strictTreebank3: PTBTokenizer deliberately deviates from strict PTB3 WSJ tokenization in two cases. Setting this improves compatibility for those cases. They are: (i) When an acronym is followed by a sentence end, such as "U.K." at the end of a sentence, the PTB3 has tokens of "Corp" and ".", while by default PTBTokenizer duplicates the period returning tokens of "Corp." and ".", and (ii) PTBTokenizer will return numbers with a whole number and a fractional part like "5 7/8" as a single token, with a non-breaking space in the middle, while the PTB3 separates them into two tokens "5" and "7/8". (Exception: for only "U.S." the treebank does have the two tokens "U.S." and "." like our default; strictTreebank3 now does that too.) The default is false.
-;;     splitHyphenated: whether or not to tokenize segments of hyphenated words separately ("school" "-" "aged", "frog" "-" "lipped"), keeping the exceptions in Supplementary Guidelines for ETTB 2.0 by Justin Mott, Colin Warner, Ann Bies, Ann Taylor and CLEAR guidelines (Bracketing Biomedical Text) by Colin Warner et al. (2012). Default is false, which maintains old treebank tokenizer behavior.
-
-
 (defn make-tokenizer
   ([k text]
    (make-tokenizer k text nil))
   ([k text options]
    (let [{:keys [class args-fn]} (key->new-tokenizer k)]
      (Reflector/invokeConstructor class (args-fn text options)))))
+
+;; (defn tokenize
+;;   ([k text]
+;;    (tokenize k text nil))
+;;   ([k text options]
+;;    ;; FIXME: options is not being used, actually.
+;;    (->> (mapv name options)
+;;         (join \,)
+;;         (make-tokenizer k text)
+;;         (.tokenize)
+;;         (mapv #(array-map :token (.value %)
+;;                           :start-offset (.beginPosition %)
+;;                           :end-offset (.endPosition %))))))
+
+(defn tokenize [k text]
+  (->> (make-tokenizer k text)
+       (.tokenize)
+       (mapv #(array-map :token (.value %)
+                         :start-offset (.beginPosition %)
+                         :end-offset (.endPosition %)))))
+
+;; (tokenize :ptb-core-label "The meaning and purpose of life is plain to see.")
+;; (tokenize :ptb-word "The meaning and purpose of life is plain to see.")
 
 ;;;
 ;;; sentences
@@ -179,5 +191,11 @@
 ;;             (= (class m) Constructor))
 ;;           (:members (reflect clss))))
 
-
+;;;
+;;;
+;;; (def pipeline (make-pipeline :parse))
+;;; (def annotation (.process pipeline "The meaning and purpose of life is plain to see." ))
+;;; (.annotate pipeline annotation)
+;;; (.prettyPrint pipeline annotation *out*)
+;;; https://nlp.stanford.edu/software/stanford-dependencies.shtml
 
