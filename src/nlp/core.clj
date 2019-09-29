@@ -346,19 +346,19 @@
 ;;;                   (mapv #(.toString %))))
 ;;;
 
-(defrecord Mention [core type gender start end])
-(defn make-mention [child-mention]
-  (->Mention (.toString child-mention)
-             (.name (.mentionType child-mention))
-             (.name (.gender child-mention))
-             (.startIndex child-mention)
-             (.endIndex child-mention)))
+(defrecord Mention [context type start end])
+(defn make-mention [mention]
+  (->Mention (.toString mention)
+             (.name (.mentionType mention))
+             (.startIndex mention)
+             (.endIndex mention)))
 
-(defrecord Cluster [id mention-span mentions])
+(defrecord Cluster [id mention-span gender mentions])
 (defn make-cluster [coref-chain]
   (let [mention (.getRepresentativeMention coref-chain)
         mention-span (.mentionSpan mention)
         mentions (.getMentionsInTextualOrder coref-chain)]
     (->Cluster (.getChainID coref-chain)
                mention-span
+               (.name (.gender mention))
                (mapv make-mention (.getMentionsInTextualOrder coref-chain)))))
