@@ -443,9 +443,14 @@
                 :dependent-word dependent-word
                 :dependent-tag dependent-tag)))
 
-(defn sentence->word-dependencies [sentence]
-  (let [parser (LexicalizedParser/loadModel "edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz" [])]
 
+(defn- %load-model [model]
+  (LexicalizedParser/loadModel (str "edu/stanford/nlp/models/lexparser/" model) []))
+
+(defonce load-model (memoize %load-model))
+
+(defn sentence->word-dependencies [sentence]
+  (let [parser (load-model "englishPCFG.ser.gz")]
     (mapv make-word-dependency
           (-> (.treebankLanguagePack parser)
               (.grammaticalStructureFactory)
