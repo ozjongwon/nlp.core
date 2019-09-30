@@ -3,7 +3,7 @@
 ;;;
 (ns nlp.core
   (:require
-   [clojure.string :refer [join]]
+   [clojure.string :refer [join split]]
    [medley.core :refer [find-first]]
    ;;[clojure.reflect :refer [reflect]]
    )
@@ -28,8 +28,8 @@
     CoreAnnotations$NamedEntityTagAnnotation CoreAnnotations$TokensAnnotation
     CoreAnnotations$PartOfSpeechAnnotation
     CoreLabel TaggedWord Word SentenceUtils]
-   [edu.stanford.nlp.coref CorefCoreAnnotations$CorefChainAnnotation]
-   ;;[edu.stanford.nlp.dcoref CorefCoreAnnotations$CorefChainAnnotation]
+   ;; [edu.stanford.nlp.coref CorefCoreAnnotations$CorefChainAnnotation]
+   [edu.stanford.nlp.dcoref CorefCoreAnnotations$CorefChainAnnotation]
    [edu.stanford.nlp.pipeline Annotation StanfordCoreNLP]
 
    [edu.stanford.nlp.tagger.maxent MaxentTagger]
@@ -346,6 +346,13 @@
 ;;;                   (mapv #(.toString %))))
 ;;;
 
+
+;; (def clusters (->> (.get ann2 CorefCoreAnnotations$CorefChainAnnotation)
+;;                    (.values)
+;;                    (mapv make-cluster)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defrecord Mention [context type start end])
 (defn make-mention [mention]
   (->Mention (.toString mention)
@@ -362,3 +369,85 @@
                mention-span
                (.name (.gender mention))
                (mapv make-mention (.getMentionsInTextualOrder coref-chain)))))
+
+(defn text->coref [text]
+  (let [ann (annotate-text text [:parse :coref])]
+    (->>  (.get ann edu.stanford.nlp.coref.CorefCoreAnnotations$CorefChainAnnotation)
+          (.values)
+          (mapv make-cluster))))
+
+(defn text->dcoref [text]
+  ;; FIXME: this does not work!
+  (let [ann (annotate-text text [:parse :dcoref])]
+    (->>  (.get ann CorefCoreAnnotations$CorefChainAnnotation)
+          (.values)
+          (mapv make-cluster))))
+
+;;;;;;;;;;;;;;;;;;
+(defonce penn-treebank-tags #{"CC"	; Coordinating conjunction
+                              "CD"	; Cardinal number
+                              "DT"	; Determiner
+                              "EX"	; Existential there
+                              "FW"	; Foreign word
+                              "IN"	; Preposition or subordinating conjunction
+                              "JJ"	; Adjective
+                              "JJR"	; Adjective, comparative
+                              "JJS"	; Adjective, superlative
+                              "LS"	; List item marker
+                              "MD"	; Modal
+                              "NN"	; Noun, singular or mass
+                              "NNS"	; Noun, plural
+                              "NNP"	; Proper noun, singular
+                              "NNPS"    ; Proper noun, plural
+                              "PDT"	; Predeterminer
+                              "POS"	; Possessive ending
+                              "PRP"	; Personal pronoun
+                              "PRP$"    ; Possessive pronoun
+                              "RB"	; Adverb
+                              "RBR"	; Adverb, comparative
+                              "RBS"	; Adverb, superlative
+                              "RP"	; Particle
+                              "SYM"	; Symbol
+                              "TO"	; to
+                              "UH"	; Interjection
+                              "VB"	; Verb, base form
+                              "VBD"	; Verb, past tense
+                              "VBG"	; Verb, gerund or present participle
+                              "VBN"	; Verb, past participle
+                              "VBP"	; Verb, non-3rd person singular present
+                              "VBZ"	; Verb, 3rd person singular present
+                              "WDT"	; Wh-determiner
+                              "WP"	; Wh-pronoun
+                              "WP$"	; Possessive wh-pronoun
+                              "WRB"	; Wh-adverb
+                              })
+
+(defn penn-treebank-string->tag [s]
+  (if-let [tag-str (penn-treebank-tags s)]
+    (keyword tag-str)
+    (throw (Exception. (str "Unknown peen-treebank tag: " s)))))
+
+(defn str->word-and-penn-treebank-tag [s]
+  (split s #"/"))
+
+(defrecord WordDependency [governor-word governor-tag relation relation dependent-word dependent-tag])
+
+(defn make-word-dependency [typed-dependency]
+  (let [[governor-word governor-tag] (str->word-and-penn-treebank-tag
+                                      (.toString (.gov typed-dependency)))
+         [dependent-word dependent-tag] (str->word-and-penn-treebank-tag
+                                         (.toString (.dep typed-dependency)))]
+     (array-map :governor-word governor-word
+                :governor-tag governor-tag
+                :relation (-> (.reln typed-dependency) (.getLongName))
+                :dependent-word dependent-word
+                :dependent-tag dependent-tag)))
+
+(defn sentence->word-dependencies [sentence]
+  (let [parser (LexicalizedParser/loadModel "edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz" [])]
+
+    (mapv make-word-dependency
+          (-> (.treebankLanguagePack parser)
+              (.grammaticalStructureFactory)
+              (.newGrammaticalStructure (.parse parser (.tokenize (make-tokenizer :ptb-core-label sentence))))
+              (.typedDependenciesCCprocessed)))))
