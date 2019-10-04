@@ -430,7 +430,7 @@
 (defn str->word-and-penn-treebank-tag [s]
   (split s #"/"))
 
-(defrecord WordDependency [governor-word governor-tag relation relation dependent-word dependent-tag])
+(defrecord WordDependency [governor-word governor-tag relation dependent-word dependent-tag])
 
 (defn make-word-dependency [typed-dependency]
   (let [[governor-word governor-tag] (str->word-and-penn-treebank-tag
@@ -456,3 +456,29 @@
               (.grammaticalStructureFactory)
               (.newGrammaticalStructure (.parse parser (.tokenize (make-tokenizer :ptb-core-label sentence))))
               (.typedDependenciesCCprocessed)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defrecord TokenInfo [word named-entity start end pos])
+(defn make-token-info [token]
+  (->TokenInfo (.get token CoreAnnotations$TextAnnotation)
+               (.get token CoreAnnotations$NamedEntityTagAnnotation)
+               (.beginPosition token)
+               (.endPosition token)
+               (.get token CoreAnnotations$PartOfSpeechAnnotation)))
+
+(defn sentences->annotated-words [sentences]
+  ;; FIXME: use
+  ;; #{edu.stanford.nlp.ling.CoreAnnotations$MentionsAnnotation
+  ;;   edu.stanford.nlp.coref.CorefCoreAnnotations$CorefMentionsAnnotation
+  ;;   edu.stanford.nlp.ling.CoreAnnotations$CorefMentionToEntityMentionMappingAnnotation
+  ;;   edu.stanford.nlp.ling.CoreAnnotations$EntityMentionToCorefMentionMappingAnnotation
+  ;;   edu.stanford.nlp.coref.CorefCoreAnnotations$CorefChainAnnotation}
+
+  (let [annotation (annotate-text sentences [:parse :dcoref])]
+    ;; (.keySet annotation) ;; to get available annotations
+    (->> (.get annotation CoreAnnotations$SentencesAnnotation)
+         (mapv #(.get % CoreAnnotations$TokensAnnotation))
+         (mapv #(mapv make-token-info %)))))
+
+;;(sentences->annotated-words "The robber took the cash and ran. The policeman chased him down the street. A passerby, watching the action, tripped the thief as he passed by. They all lived happily ever after, except for the thief of course." )
+
