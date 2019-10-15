@@ -377,7 +377,6 @@
           (mapv make-cluster))))
 
 (defn text->dcoref [text]
-  ;; FIXME: this does not work!
   (let [ann (annotate-text text [:parse :dcoref])]
     (->>  (.get ann CorefCoreAnnotations$CorefChainAnnotation)
           (.values)
