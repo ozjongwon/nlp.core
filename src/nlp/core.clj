@@ -28,8 +28,8 @@
     CoreAnnotations$NamedEntityTagAnnotation CoreAnnotations$TokensAnnotation
     CoreAnnotations$PartOfSpeechAnnotation
     CoreLabel TaggedWord Word SentenceUtils]
-   ;; [edu.stanford.nlp.coref CorefCoreAnnotations$CorefChainAnnotation]
-   [edu.stanford.nlp.dcoref CorefCoreAnnotations$CorefChainAnnotation]
+   [edu.stanford.nlp.coref CorefCoreAnnotations$CorefChainAnnotation]
+   ;; [edu.stanford.nlp.dcoref CorefCoreAnnotations$CorefChainAnnotation]
    [edu.stanford.nlp.pipeline Annotation StanfordCoreNLP]
 
    [edu.stanford.nlp.tagger.maxent MaxentTagger]
@@ -372,7 +372,7 @@
 
 (defn text->coref [text]
   (let [ann (annotate-text text [:parse :coref])]
-    (->>  (.get ann edu.stanford.nlp.coref.CorefCoreAnnotations$CorefChainAnnotation)
+    (->>  (.get ann CorefCoreAnnotations$CorefChainAnnotation)
           (.values)
           (mapv make-cluster))))
 
@@ -481,4 +481,3 @@
          (mapv #(mapv make-token-info %)))))
 
 ;;(sentences->annotated-words "The robber took the cash and ran. The policeman chased him down the street. A passerby, watching the action, tripped the thief as he passed by. They all lived happily ever after, except for the thief of course." )
-
