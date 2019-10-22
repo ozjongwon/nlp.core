@@ -5,7 +5,7 @@
 ;;; - Searching
 ;;; - Machine Translation
 ;;; - Summation
-;;; - Named Entity Recognition
+;;; - Named Entity Recognition - NER
 ;;; - Information Grouping
 ;;; - Part Of Speech tagging (POS)
 ;;; - Sentiment Analysis
@@ -35,7 +35,7 @@
 ;;;
 (ns nlp.core
   (:require
-   [clojure.string :refer [join split]]
+   [clojure.string :refer [join split lower-case]]
    [clojure.set :refer [intersection]]
    [medley.core :refer [find-first]])
   (:import
@@ -60,6 +60,7 @@
    [edu.stanford.nlp.ling CoreAnnotations$SentencesAnnotation CoreAnnotations$TextAnnotation
     CoreAnnotations$NamedEntityTagAnnotation CoreAnnotations$TokensAnnotation
     CoreAnnotations$PartOfSpeechAnnotation CoreAnnotations$LemmaAnnotation
+    CoreAnnotations$MentionsAnnotation CoreAnnotations$NamedEntityTagAnnotation
     CoreLabel TaggedWord Word SentenceUtils]
    [edu.stanford.nlp.coref CorefCoreAnnotations$CorefChainAnnotation]
    ;; [edu.stanford.nlp.dcoref CorefCoreAnnotations$CorefChainAnnotation]
@@ -68,6 +69,12 @@
    [edu.stanford.nlp.tagger.maxent MaxentTagger]
    [edu.stanford.nlp.parser.lexparser LexicalizedParser])
   (:gen-class :main true))
+
+;;;
+;;; Useful functions
+;;;
+(defn make-keyword [s]
+  (keyword (lower-case s)))
 
 
 ;;;
@@ -81,13 +88,13 @@
   {:tokenize []
    :docdate []
    :cleanxml ["tokenize"]
-   :ssplit ["tokenize"]
+   :ssplit ["tokenize"]                 ; sentence detection
    :pos ["tokenize" "ssplit"]
    :parse ["tokenize" "ssplit"]
    :lemma ["tokenize" "ssplit" "pos"]
    :regexner ["tokenize" "ssplit" "pos"]
    :depparse ["tokenize" "ssplit" "pos"]
-   :ner ["tokenize" "ssplit" "pos" "lemma"]
+   :ner ["tokenize" "ssplit" "pos" "lemma"] ; Named Entity Recognition
    :entitylink ["tokenize" "ssplit" "pos" "lemma"  "ner"]
    :sentiment ["tokenize" "ssplit" "pos" "parse"]
    :dcoref ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"]
@@ -163,11 +170,11 @@
                  (map #(convert-tree % kfn vfn) more-nodes))))))
 
 (defn- tree->parse-tree [tree-node]
-  (convert-tree (read-string (.toString tree-node)) keyword name))
+  (convert-tree (read-string (.toString tree-node)) make-keyword name))
 
 (defn- tree->pos [tree-node]
   (->> (.taggedLabeledYield tree-node)
-       (mapv #(vector (.word %) (keyword (.tag %))))
+       (mapv #(vector (.word %) (make-keyword (.tag %))))
        (into (hash-map))))
 
 (defmethod annotator-key->execute-operation :parse [k ann]
@@ -188,8 +195,6 @@
         (.get ann CoreAnnotations$TokensAnnotation)))
 
 ;; :lemma
-(defrecord LemmaResult [token begin end])
-
 (def lemma-paragraph "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary.")
 
 (defmethod annotator-key->execute-operation :lemma [k ann]
@@ -197,6 +202,20 @@
                  (.get token-ann CoreAnnotations$LemmaAnnotation))
                (.get % CoreAnnotations$TokensAnnotation))
         (.get ann CoreAnnotations$SentencesAnnotation)))
+
+;; :ner
+(def ner-paragraph "Joe was the last person to see Fred and Fred likes Joe. The latter has IBM computers and the former lives in Strathfield.")
+
+(defmethod annotator-key->execute-operation :ner [k ann]
+  (mapv (fn [sentence-ann]
+          (let [mentions-ann (.get sentence-ann CoreAnnotations$MentionsAnnotation)]
+            (zipmap (mapv #(.get % CoreAnnotations$TextAnnotation)
+                          mentions-ann)
+                    (mapv #(make-keyword (.get % CoreAnnotations$NamedEntityTagAnnotation))
+                          mentions-ann))))
+        (.get ann CoreAnnotations$SentencesAnnotation)))
+
+
 
 ;;;
 (defrecord PerOperationResult [operation result])
