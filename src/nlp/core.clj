@@ -1,12 +1,43 @@
 ;;;
-;;; JVM option: -Xmx2g
+;;; * NLP SUMMARY
+;;;
+;;; Application Areas of NLP
+;;; - Searching
+;;; - Machine Translation
+;;; - Summation
+;;; - Named Entity Recognition
+;;; - Information Grouping
+;;; - Part Of Speech tagging (POS)
+;;; - Sentiment Analysis
+;;; - Answering Queries
+;;; - Speech recognition
+;;; - Natural Language Generation
+;;;
+;;; Morpheme - the minimal unit of text which has meaning. Ex) prefixes and suffixes
+;;; POS label - assign labels to words and morphemes.
+;;; Stemming - finding the word stem.
+;;; Lemmatization - determine the lemma, the base form
+;;; Corereferences resolution - determine the relationship between words in sentences.
+;;; Word Sense Disambiguation - find the intended meaning.
+;;; Morphology - study of the structure of words
+;;; Parts of Text - words, sentences, paragraphs, etc OR sometimes tokens == words
+;;; Claassification - Assign labels to information found in text or documents:
+;;;  - labels are known - classification.
+;;;  - labels are unknown - clustering.
+;;; Categorization - assign a text element to categories.
+;;;
+;;;-------------------------------------------------------------------------------------------
+;;;
+;;; * PTBTokenizer - CoreLabelTokenFactory Vs. WordTokenFactory
+;;; * Annotators - extract relationship using Annotators with their operations
+;;;  (aka text analytics). Ex) annotators == :tokenize :ssplit :parse ==> tokenize,
+;;;  splits to sentences, and syntactic analysis by parsing
 ;;;
 (ns nlp.core
   (:require
    [clojure.string :refer [join split]]
-   [medley.core :refer [find-first]]
-   ;;[clojure.reflect :refer [reflect]]
-   )
+   [clojure.set :refer [intersection]]
+   [medley.core :refer [find-first]])
   (:import
    [java.util Properties]
    [clojure.lang Reflector]
@@ -16,6 +47,8 @@
    ;; Tokenizers
    ;;[edu.stanford.nlp.international.arabic.process ArabicTokenizer]
    ;;[edu.stanford.nlp.trees.international.pennchinese CHTBTokenizer]
+   [edu.stanford.nlp.trees LabeledScoredTreeNode TreeCoreAnnotations$TreeAnnotation]
+   [edu.stanford.nlp.semgraph SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation]
    ;;[edu.stanford.nlp.international.french.process FrenchTokenizer]
    [edu.stanford.nlp.process WordTokenFactory CoreLabelTokenFactory
     DocumentPreprocessor PTBTokenizer TokenizerFactory
@@ -33,81 +66,14 @@
    [edu.stanford.nlp.pipeline Annotation StanfordCoreNLP]
 
    [edu.stanford.nlp.tagger.maxent MaxentTagger]
-   [edu.stanford.nlp.parser.lexparser LexicalizedParser]
-   [edu.stanford.nlp.trees TreePrint]
-   )
+   [edu.stanford.nlp.parser.lexparser LexicalizedParser])
   (:gen-class :main true))
 
-;;;
-;;; Utility fns
-;;;
-
-(defn make-print-method [obj]
-  (let [resolved-obj (resolve obj)
-        str-prefix (str "#<"  (.getSimpleName resolved-obj) " ")]
-    `(defmethod print-method ~resolved-obj
-       [piece# ^java.io.Writer writer#]
-       (.write writer#
-               (str ~str-prefix (.toString piece#) ">")))))
-
-(defmacro def-print-methods [& objects]
-  (let [qualified-objs objects]
-    `(do ~@(map (fn [obj]
-                  (make-print-method obj)) qualified-objs))))
-
-(def-print-methods CoreLabel TaggedWord Word)
-
-;;;
-;;; Tokenizers
-;;;
-(defn- %make-ptb-tokenizer-args [k text options]
-  (object-array [(StringReader. text)
-                 (case k
-                   :ptb-word (WordTokenFactory.)
-                   :ptb-core-label (CoreLabelTokenFactory.))
-                 options]))
-
-(defonce key->new-tokenizer
-  {:ptb-word {:class PTBTokenizer :args-fn (partial %make-ptb-tokenizer-args :ptb-word)}
-   :ptb-core-label {:class PTBTokenizer :args-fn (partial %make-ptb-tokenizer-args :ptb-core-label)}})
-
-(defn make-tokenizer
-  ([k text]
-   (make-tokenizer k text nil))
-  ([k text options]
-   (let [{:keys [class args-fn]} (key->new-tokenizer k)]
-     (Reflector/invokeConstructor class (args-fn text options)))))
-
-(defn make-sentence-tokens [tokens]
-  (mapv #(array-map :token (.word %)
-                    :start-offset (.beginPosition %)
-                    :end-offset (.endPosition %))
-        tokens))
-
-(defn tokenize [k text]
-  (->> (make-tokenizer k text)
-       (.tokenize)
-       (make-sentence-tokens)))
-
-;; (tokenize :ptb-core-label "The meaning and purpose of life is plain to see.")
-;; (tokenize :ptb-word "The meaning and purpose of life is plain to see.")
-
-;;;
-;;; DocumentPreprocessor sentences
-;;;
-(defn text->core-label-sentences [text]
-  "Split a string into a sequence of sentences, each of which is a sequence of CoreLabels"
-  (->> (StringReader. text)
-       (DocumentPreprocessor.)
-       (.iterator)
-       (iterator-seq)
-       (mapv (fn [sentence-tokens]
-               (make-sentence-tokens sentence-tokens)))))
-;; (text->core-label-sentences "Let's pause, and then reflect.")
 
 ;;;
 ;;; StanfordCoreNLP Pipeline
 ;;; https://stanfordnlp.github.io/CoreNLP/annotators.html
+;;;
 (defn find-in-coll [coll el]
   (find-first #(= % el) coll))
 
@@ -127,9 +93,7 @@
    :dcoref ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"]
    :coref ["tokenize" "ssplit" "pos" "lemma"  "ner"]
    :kbp ["tokenize" "ssplit" "pos" "lemma"]
-   :quote ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"]
-   }
-  )
+   :quote ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"]})
 
 (defn- %check-parse-dependeny-when-opt [args opt]
   (when (find-in-coll args opt)
@@ -163,320 +127,140 @@
        (recur more-ks (into result (conj opts-found (name k))))
        (throw (Exception. (str "Unknown key: " k "!")))))))
 
-#_
-(defrecord PipelineAnnotatorKeys [pipeline annotator-keys])
+(let [existing-core-nlp (atom nil)
+      existing-opts-set (atom #{})]
+  (defn make-pipeline [& annotators-keys]
+    (let [annotators-opts (make-annotators-opts annotators-keys)
+          annotators-opts-set (set annotators-opts)]
+     (if (and @existing-core-nlp
+              (= (intersection @existing-opts-set annotators-opts-set)
+                 annotators-opts-set))
+       @existing-core-nlp
+       (let [new-core-nlp (StanfordCoreNLP. (doto (Properties.)
+                                              (.put "annotators" (join \, annotators-opts)))
+                                            true)]
+         (reset! existing-core-nlp new-core-nlp)
+         (reset! existing-opts-set annotators-opts-set)
+         new-core-nlp)))))
 
-#_
-(defn make-pipeline-annotator-keys [& annotators-args]
-  (let [annotators-opts (make-annotators-opts annotators-args)]
-    (->PipelineAnnotatorKeys (StanfordCoreNLP. (doto (Properties.)
-                                                 (.put "annotators" (join \, annotators-opts)))
-                                               true)
-                             (mapv keyword annotators-opts))))
-#_
-(defn make-pipeline [& annotators-args]
-  (-> (apply make-pipeline-annotator-keys annotators-args)
-      (:pipeline)))
-(let [stanford-core-nlp (atom nil)]
- (defn make-pipeline [& annotators-keys]
-   (StanfordCoreNLP. (doto (Properties.)
-                       (.put "annotators" (join \, (make-annotators-opts annotators-keys))))
-                     true)))
-
-;;; (def pipeline (make-pipeline :ssplit))
-;;; (def annotation (.process pipeline "The meaning and purpose of life is plain to see." ))
-;;; (.annotate pipeline annotation)
-;;; (.prettyPrint pipeline annotation *out*)
-;;; https://nlp.stanford.edu/software/stanford-dependencies.shtml
-
-;;; FIXME: don't know what to do yet
 ;;;
-;;; (def lm (annotate-text "Eat, drink, and be merry, for life is but a dream" [:lemma] ))
-;;; (def cll (.get lm CoreAnnotations$TokensAnnotation))
-;;; (mapv #(.lemma %) cll)
+;;; Annotator-key -> Operation
 ;;;
-;;;
-;;; NOTE:
-;;; - deal with sentences
-;;; - Named Entity Recognition
-;;;
-(defprotocol AnnotationProtocol
-  (token-entities [this annotation]))
-
-(defrecord TextAnnotation [token start end]
-  AnnotationProtocol
-  (token-entities [_ annotation]
-    (assoc :token (.get annotation CoreAnnotations$TextAnnotation)
-           :start (.beginPosition annotation)
-           :end (.endPosition annotation))))
-
-(defrecord SentencesAnnotation []
-  AnnotationProtocol
+(defonce annotator-key->annotation-class
+  {;; :tokenize
+   ;; :docdate
+   ;; :cleanxml
+   :ssplit CoreAnnotations$SentencesAnnotation
+   ;;:pos
+   ;; :lemma
+   ;; :kbp
+   ;; :regexner
+   ;; :ner
+   ;; :entitylink
+   ;; :coref
+   :parse  TreeCoreAnnotations$TreeAnnotation
+   ;; :dcoref
+   ;; :sentiment
+   ;; :depparse
+   ;; :quote
+   }
   )
 
-(defonce annotation-keys->token-class
-  {:text CoreAnnotations$TextAnnotation
-   :sentences CoreAnnotations$SentencesAnnotation})
+(defrecord ParseResult [tree pos dependency])
+(defprotocol AnnotationOperationResult
+  (execute-operation [annotation-like]))
 
-(defn annotate-text [text annotators-keys]
-  ;;[text annotation-keys annotators-keys]
-  (let [annotation (Annotation. text)]
-    (.annotate (apply make-pipeline annotators-keys) annotation) ;; side effect
-    annotation
-    #_
-    (mapv (fn [k]
-            (let [clss (annotation-keys->token-class k)]
-              (assert clss)
-              {k (.get annotation clss)
-               ;;:token (.word annotation)
-               ;;:start-offset (.beginPosition annotation)
-               ;;:end-offset (.endPosition annotation)
-               }))
-          annotation-keys)))
+(def atom? (complement coll?))
+(defn convert-tree
+  ([tr kfn]
+   (convert-tree tr kfn identity))
+  ([[k v & more-nodes] kfn vfn]
+   (if (nil? k)
+     nil
+     (cons (kfn k)
+           (cons (if (atom? v)
+                   (vfn v)
+                   (convert-tree v kfn vfn))
+                 (map #(convert-tree % kfn vfn) more-nodes))))))
 
-(defn- get-tokens-entities
-  "builds map: {:token token :named-entity named-entity}"
-  [tok-ann]
-  {:token (.get tok-ann CoreAnnotations$TextAnnotation)
-   :named-entity (.get tok-ann CoreAnnotations$NamedEntityTagAnnotation)
-   :start-offset (.beginPosition tok-ann)
-   :end-offset (.endPosition tok-ann)})
+(defn- tree->parse-tree [tree-node]
+  (convert-tree (read-string (.toString tree-node)) keyword name))
 
-(defn- get-token-annotations
-  "Passes TokenAnnotations extracted from SentencesAnnotation to get-tokens-entities
-  which returns a map {:token token :named-entity ne}"
-  [sentence-annotation]
-  (mapv get-tokens-entities (.get sentence-annotation CoreAnnotations$TokensAnnotation)))
+(defn- tree->pos [tree-node]
+  (->> (.taggedLabeledYield tree-node)
+       (mapv #(vector (.word %) (keyword (.tag %))))
+       (into (hash-map))))
 
-(defn- get-text-tokens [sen-ann]
-  "builds map: {:tokens tokens}"
-  {:tokens (get-token-annotations sen-ann)})
-
-(defn- get-sentences-annotation
-  "passes SentencesAnnotation extracted from Annotation object to function
-  get-text-tokens which returns a map:
-  {:tokens {:token token :named-entity ne}}"
-  [^Annotation annotation]
-  (mapv get-text-tokens (.get annotation CoreAnnotations$SentencesAnnotation)))
-
-#_
-(let [paragraph "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary."
-      pipeline (make-pipeline :lemma)]
+(defn- tree->dependencies [tree-node]
+  ;; FIXME: I don't know how to do this
+  ;; s1 is a sentence not tree-node
+  ;;(.get s1 SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation)
   )
 
-;; (def ann1 (abc "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary." :lemma))
-;; (.get ann1 CoreAnnotations$SentencesAnnotation)
-;; (get-sentences-annotation ann1)
+(extend-protocol AnnotationOperationResult
+  LabeledScoredTreeNode
+  (execute-operation [this]
+;;    (.labels this)
+    ;; Dependency Parse (enhanced plus plus dependencies):
+    ;; root(ROOT-0, Who-1)
+    ;; cop(Who-1, are-2)
+    ;; nsubj(Who-1, you-3)
+    ;; punct(Who-1, ?-4)
 
+    (->ParseResult (tree->parse-tree this)
+                   (tree->pos this)
+                   nil
+                   #_
+                   (tree->dependencies this))))
 
-;;; POS Tagger
-;;; (def tagger (MaxentTagger. "edu/stanford/nlp/models/pos-tagger/english-left3words/english-left3words-distsim.tagger"))
-;;; (def sl (. MaxentTagger tokenizeText (StringReader. "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary.")))
-;;; (.tagSentence tagger  (first sl))
-;;; (mapv #(array-map :token (.word %) :tag (.tag %))  *1)
+(defmulti execute-operation-using-sub-annotator (fn [_ sub-annotator] sub-annotator))
+(defmethod execute-operation-using-sub-annotator TreeCoreAnnotations$TreeAnnotation [annotator sub-annotator]
+  (mapv #(assoc (execute-operation (.get % sub-annotator))
+                :dependency (.get % SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation))
+        ;; FIXME:
+        ;; https://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/semgraph/SemanticGraph.html
+        (.get annotator CoreAnnotations$SentencesAnnotation)))
 
-
-;;; POS tagging using pipeline
-;;; (def ann (annotate-text "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary." [:ner] ))
-;;; (def sl (.get ann CoreAnnotations$SentencesAnnotation))
-;;; (def cll (mapv #(.get % CoreAnnotations$TokensAnnotation) sl))
-;; (mapv #(mapv (fn [cl]
-;;                (array-map :word (.word cl)
-;;                           :tag (.tag cl)
-;;                           :ner (.ner cl)
-;;                           :lemma (.lemma cl)))
-;;              %)
-;;       cll)
-
-
-;;; Parser
-;;; (LexicalizedParser/loadModel)
-;;; ;;OR
-;;; (def parser (LexicalizedParser/loadModel "edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz" []))
-;;; (def wl (SentenceUtils/toCoreLabelList (into-array ["The" "cow" "jumped" "over" "the" "moon" "." ])))
-;;; (.parse parser wl)
-;;; (read-string (.toString x))
-;;; ;; OR
-;;; (read-string (.pennString x))
-;;;
-;;;
-
-(defn text->core-label-list [text]
-  (->> (StringReader. text)
-       (DocumentPreprocessor.)
-       (.iterator)
-       (iterator-seq)))
-;;; Parse Sentences
-;;; (def parser (LexicalizedParser/loadModel "edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz" []))
-;;; (def cll (text->core-label-list "Bell, based in Los Angeles, makes and distributes electronic, computer and building prod
-;;; -ucts")
-;;; (def trees (mapv #(.parse parser %) cll))
-;;; (mapv #(read-string (.pennString %)) trees)
-;;;
-;;; formatString - A comma separated list of ways to print each Tree. For instance, "penn" or "words,typedDependencies". Known formats are: oneline, penn, latexTree, xmlTree, words, wordsAndTags, rootSymbolOnly, dependencies, typedDependencies, typedDependenciesCollapsed, collocations, semanticGraph, conllStyleDependencies, conll2007. The last two are both tab-separated values formats. The latter has a lot more columns filled with underscores. All of them print a blank line after the output except for oneline. oneline is also not meaningful in XML output (it is ignored: use penn instead). (Use of typedDependenciesCollapsed is deprecated. It works but we recommend instead selecting a type of dependencies using the optionsString argument. Note in particular that typedDependenciesCollapsed does not do CC propagation, which we generally recommend.)
-;;; (def tp (TreePrint. "typedDependenciesCollapsed"))
-;;; (def tp2 (TreePrint. "penn,typedDependenciesCollapsed"))
-;;; (mapv #(.printTree tp %) trees)
-;;; (mapv #(.printTree tp2 %) trees)
-;;; (mapv #(read-string (.pennString %)) trees)
+(defrecord PerOperationResult [operation sentence-results])
 
 ;;;
-;;; Word dependencies
-;;; (def sentence  "The cow jumped over the moon.")
-;;; (def parse-tree (.parse parser (.tokenize (make-tokenizer :ptb-core-label sentence))))
-;;; (def tlp (.treebankLanguagePack parser))
-;;; (def gsf (.grammaticalStructureFactory tlp))
-;;; (def gs (.newGrammaticalStructure gsf parse-tree))
-;;; (def tdl (.typedDependenciesCCprocessed gs))
-;;; (mapv #(array-map :governor-word (.toString (.gov %))
-;;;                   :relation (-> (.reln %) (.getLongName))
-;;;                   :dependent-word (.toString (.dep %)))
-;;;       tdl)
-
+;;; Main function
 ;;;
-;;; Coreference
-;;; (def ann (annotate-text "He took his cash and she took her change and together they bought their lunch." [:parse :coref]))
-;;; (def chains (into [] (.values (.get ann CorefCoreAnnotations$CorefChainAnnotation))))
-;;; (def chains (->> (.get ann CorefCoreAnnotations$CorefChainAnnotation)
-;;;                  (.values)
-;;;                  (mapv #(.toString %))))
-;;;(def ann2 (annotate-text "He took his cash and she took her change and together they bought their lunch." [:dcoref]))
-;;; (def chains2 (->> (.get ann2 edu.stanford.nlp.coref.CorefCoreAnnotations$CorefChainAnnotation)
-;;;                   (.values)
-;;;                   (mapv #(.toString %))))
-;;;
+(defn analyse-text [text & annotators-keys]
+  (let [annotation (Annotation. text)
+        pipeline (apply make-pipeline annotators-keys)]
+    (.annotate pipeline annotation) ;; side effect
+    #_    [pipeline annotation]
+
+    (mapv #(->PerOperationResult %
+                                 (execute-operation-using-sub-annotator annotation
+                                                                        (annotator-key->annotation-class %)))
+          annotators-keys)))
+
+;; (.prettyPrint pipeline annotation *out*)
+
+;; Sentence #1 (4 tokens):
+;; Who are you?
+
+;; Tokens:
+;; [Text=Who CharacterOffsetBegin=0 CharacterOffsetEnd=3 PartOfSpeech=WP]
+;; [Text=are CharacterOffsetBegin=4 CharacterOffsetEnd=7 PartOfSpeech=VBP]
+;; [Text=you CharacterOffsetBegin=8 CharacterOffsetEnd=11 PartOfSpeech=PRP]
+;; [Text=? CharacterOffsetBegin=11 CharacterOffsetEnd=12 PartOfSpeech=.]
+
+;; Constituency parse:
+;; (ROOT
+;;  (SBARQ
+;;   (WHNP (WP Who))
+;;   (SQ (VBP are)
+;;       (NP (PRP you)))
+;;   (. ?)))
 
 
-;; (def clusters (->> (.get ann2 CorefCoreAnnotations$CorefChainAnnotation)
-;;                    (.values)
-;;                    (mapv make-cluster)))
+;; Dependency Parse (enhanced plus plus dependencies):
+;; root(ROOT-0, Who-1)
+;; cop(Who-1, are-2)
+;; nsubj(Who-1, you-3)
+;; punct(Who-1, ?-4)
+;; nil
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defrecord Mention [context type start end])
-(defn make-mention [mention]
-  (->Mention (.toString mention)
-             (.name (.mentionType mention))
-             (.startIndex mention)
-             (.endIndex mention)))
-
-(defrecord Cluster [id mention-span gender mentions])
-(defn make-cluster [coref-chain]
-  (let [mention (.getRepresentativeMention coref-chain)
-        mention-span (.mentionSpan mention)
-        mentions (.getMentionsInTextualOrder coref-chain)]
-    (->Cluster (.getChainID coref-chain)
-               mention-span
-               (.name (.gender mention))
-               (mapv make-mention (.getMentionsInTextualOrder coref-chain)))))
-
-(defn text->coref [text]
-  (let [ann (annotate-text text [:parse :coref])]
-    (->>  (.get ann CorefCoreAnnotations$CorefChainAnnotation)
-          (.values)
-          (mapv make-cluster))))
-
-(defn text->dcoref [text]
-  (let [ann (annotate-text text [:parse :dcoref])]
-    (->>  (.get ann CorefCoreAnnotations$CorefChainAnnotation)
-          (.values)
-          (mapv make-cluster))))
-
-;;;;;;;;;;;;;;;;;;
-(defonce penn-treebank-tags #{"CC"	; Coordinating conjunction
-                              "CD"	; Cardinal number
-                              "DT"	; Determiner
-                              "EX"	; Existential there
-                              "FW"	; Foreign word
-                              "IN"	; Preposition or subordinating conjunction
-                              "JJ"	; Adjective
-                              "JJR"	; Adjective, comparative
-                              "JJS"	; Adjective, superlative
-                              "LS"	; List item marker
-                              "MD"	; Modal
-                              "NN"	; Noun, singular or mass
-                              "NNS"	; Noun, plural
-                              "NNP"	; Proper noun, singular
-                              "NNPS"    ; Proper noun, plural
-                              "PDT"	; Predeterminer
-                              "POS"	; Possessive ending
-                              "PRP"	; Personal pronoun
-                              "PRP$"    ; Possessive pronoun
-                              "RB"	; Adverb
-                              "RBR"	; Adverb, comparative
-                              "RBS"	; Adverb, superlative
-                              "RP"	; Particle
-                              "SYM"	; Symbol
-                              "TO"	; to
-                              "UH"	; Interjection
-                              "VB"	; Verb, base form
-                              "VBD"	; Verb, past tense
-                              "VBG"	; Verb, gerund or present participle
-                              "VBN"	; Verb, past participle
-                              "VBP"	; Verb, non-3rd person singular present
-                              "VBZ"	; Verb, 3rd person singular present
-                              "WDT"	; Wh-determiner
-                              "WP"	; Wh-pronoun
-                              "WP$"	; Possessive wh-pronoun
-                              "WRB"	; Wh-adverb
-                              })
-
-(defn penn-treebank-string->tag [s]
-  (if-let [tag-str (penn-treebank-tags s)]
-    (keyword tag-str)
-    (throw (Exception. (str "Unknown peen-treebank tag: " s)))))
-
-(defn str->word-and-penn-treebank-tag [s]
-  (split s #"/"))
-
-(defrecord WordDependency [governor-word governor-tag relation dependent-word dependent-tag])
-
-(defn make-word-dependency [typed-dependency]
-  (let [[governor-word governor-tag] (str->word-and-penn-treebank-tag
-                                      (.toString (.gov typed-dependency)))
-         [dependent-word dependent-tag] (str->word-and-penn-treebank-tag
-                                         (.toString (.dep typed-dependency)))]
-     (array-map :governor-word governor-word
-                :governor-tag governor-tag
-                :relation (-> (.reln typed-dependency) (.getLongName))
-                :dependent-word dependent-word
-                :dependent-tag dependent-tag)))
-
-
-(defn- %load-model [model]
-  (LexicalizedParser/loadModel (str "edu/stanford/nlp/models/lexparser/" model) []))
-
-(defonce load-model (memoize %load-model))
-
-(defn sentence->word-dependencies [sentence]
-  (let [parser (load-model "englishPCFG.ser.gz")]
-    (mapv make-word-dependency
-          (-> (.treebankLanguagePack parser)
-              (.grammaticalStructureFactory)
-              (.newGrammaticalStructure (.parse parser (.tokenize (make-tokenizer :ptb-core-label sentence))))
-              (.typedDependenciesCCprocessed)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defrecord TokenInfo [word named-entity start end pos])
-(defn make-token-info [token]
-  (->TokenInfo (.get token CoreAnnotations$TextAnnotation)
-               (.get token CoreAnnotations$NamedEntityTagAnnotation)
-               (.beginPosition token)
-               (.endPosition token)
-               (.get token CoreAnnotations$PartOfSpeechAnnotation)))
-
-(defn sentences->annotated-words [sentences]
-  ;; FIXME: use
-  ;; #{edu.stanford.nlp.ling.CoreAnnotations$MentionsAnnotation
-  ;;   edu.stanford.nlp.coref.CorefCoreAnnotations$CorefMentionsAnnotation
-  ;;   edu.stanford.nlp.ling.CoreAnnotations$CorefMentionToEntityMentionMappingAnnotation
-  ;;   edu.stanford.nlp.ling.CoreAnnotations$EntityMentionToCorefMentionMappingAnnotation
-  ;;   edu.stanford.nlp.coref.CorefCoreAnnotations$CorefChainAnnotation}
-
-  (let [annotation (annotate-text sentences [:parse :dcoref])]
-    ;; (.keySet annotation) ;; to get available annotations
-    (->> (.get annotation CoreAnnotations$SentencesAnnotation)
-         (mapv #(.get % CoreAnnotations$TokensAnnotation))
-         (mapv #(mapv make-token-info %)))))
-
-;;(sentences->annotated-words "The robber took the cash and ran. The policeman chased him down the street. A passerby, watching the action, tripped the thief as he passed by. They all lived happily ever after, except for the thief of course." )
