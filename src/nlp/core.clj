@@ -63,7 +63,7 @@
     CoreLabel TaggedWord Word SentenceUtils]
    [edu.stanford.nlp.coref CorefCoreAnnotations$CorefChainAnnotation]
    ;; [edu.stanford.nlp.dcoref CorefCoreAnnotations$CorefChainAnnotation]
-   [edu.stanford.nlp.pipeline Annotation StanfordCoreNLP]
+   [edu.stanford.nlp.pipeline Annotation StanfordCoreNLP CoreDocument]
 
    [edu.stanford.nlp.tagger.maxent MaxentTagger]
    [edu.stanford.nlp.parser.lexparser LexicalizedParser])
@@ -143,32 +143,11 @@
          (reset! existing-opts-set annotators-opts-set)
          new-core-nlp)))))
 
-;;;
-;;; Annotator-key -> Operation
-;;;
-(defonce annotator-key->annotation-class
-  {;; :tokenize
-   ;; :docdate
-   ;; :cleanxml
-   :ssplit CoreAnnotations$SentencesAnnotation
-   ;;:pos
-   ;; :lemma
-   ;; :kbp
-   ;; :regexner
-   ;; :ner
-   ;; :entitylink
-   ;; :coref
-   :parse  TreeCoreAnnotations$TreeAnnotation
-   ;; :dcoref
-   ;; :sentiment
-   ;; :depparse
-   ;; :quote
-   }
-  )
+;;; Operations
+(defmulti annotator-key->execute-operation (fn [k _] k))
 
+;; :parse
 (defrecord ParseResult [tree pos dependency])
-(defprotocol AnnotationOperationResult
-  (execute-operation [annotation-like]))
 
 (def atom? (complement coll?))
 (defn convert-tree
@@ -191,37 +170,24 @@
        (mapv #(vector (.word %) (keyword (.tag %))))
        (into (hash-map))))
 
-(defn- tree->dependencies [tree-node]
-  ;; FIXME: I don't know how to do this
-  ;; s1 is a sentence not tree-node
-  ;;(.get s1 SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation)
-  )
-
-(extend-protocol AnnotationOperationResult
-  LabeledScoredTreeNode
-  (execute-operation [this]
-;;    (.labels this)
-    ;; Dependency Parse (enhanced plus plus dependencies):
-    ;; root(ROOT-0, Who-1)
-    ;; cop(Who-1, are-2)
-    ;; nsubj(Who-1, you-3)
-    ;; punct(Who-1, ?-4)
-
-    (->ParseResult (tree->parse-tree this)
-                   (tree->pos this)
-                   nil
-                   #_
-                   (tree->dependencies this))))
-
-(defmulti execute-operation-using-sub-annotator (fn [_ sub-annotator] sub-annotator))
-(defmethod execute-operation-using-sub-annotator TreeCoreAnnotations$TreeAnnotation [annotator sub-annotator]
-  (mapv #(assoc (execute-operation (.get % sub-annotator))
-                :dependency (.get % SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation))
+(defmethod annotator-key->execute-operation :parse [k ann]
+  (mapv #(let [tree-node (.get % TreeCoreAnnotations$TreeAnnotation)]
+           (map->ParseResult {:tree (tree->parse-tree tree-node)
+                              :pos (tree->pos tree-node)
+                              :dependency (.get % SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation)}))
         ;; FIXME:
         ;; https://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/semgraph/SemanticGraph.html
-        (.get annotator CoreAnnotations$SentencesAnnotation)))
+        (.get ann CoreAnnotations$SentencesAnnotation)))
 
-(defrecord PerOperationResult [operation sentence-results])
+;; :tokenize
+(defrecord TokenizeResult [token begin end])
+(defmethod annotator-key->execute-operation :tokenize [k ann]
+  (mapv #(map->TokenizeResult {:token (.word %)
+                               :begin (.beginPosition %)
+                               :end (.endPosition %)})
+        (.tokens (CoreDocument. ann))))
+
+(defrecord PerOperationResult [operation result])
 
 ;;;
 ;;; Main function
@@ -230,11 +196,8 @@
   (let [annotation (Annotation. text)
         pipeline (apply make-pipeline annotators-keys)]
     (.annotate pipeline annotation) ;; side effect
-    #_    [pipeline annotation]
-
     (mapv #(->PerOperationResult %
-                                 (execute-operation-using-sub-annotator annotation
-                                                                        (annotator-key->annotation-class %)))
+                                 (annotator-key->execute-operation % annotation))
           annotators-keys)))
 
 ;; (.prettyPrint pipeline annotation *out*)
