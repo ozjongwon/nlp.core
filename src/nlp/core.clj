@@ -59,7 +59,7 @@
 
    [edu.stanford.nlp.ling CoreAnnotations$SentencesAnnotation CoreAnnotations$TextAnnotation
     CoreAnnotations$NamedEntityTagAnnotation CoreAnnotations$TokensAnnotation
-    CoreAnnotations$PartOfSpeechAnnotation
+    CoreAnnotations$PartOfSpeechAnnotation CoreAnnotations$LemmaAnnotation
     CoreLabel TaggedWord Word SentenceUtils]
    [edu.stanford.nlp.coref CorefCoreAnnotations$CorefChainAnnotation]
    ;; [edu.stanford.nlp.dcoref CorefCoreAnnotations$CorefChainAnnotation]
@@ -185,8 +185,20 @@
   (mapv #(map->TokenizeResult {:token (.word %)
                                :begin (.beginPosition %)
                                :end (.endPosition %)})
-        (.tokens (CoreDocument. ann))))
+        (.get ann CoreAnnotations$TokensAnnotation)))
 
+;; :lemma
+(defrecord LemmaResult [token begin end])
+
+(def lemma-paragraph "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary.")
+
+(defmethod annotator-key->execute-operation :lemma [k ann]
+  (mapv #(mapv (fn [token-ann]
+                 (.get token-ann CoreAnnotations$LemmaAnnotation))
+               (.get % CoreAnnotations$TokensAnnotation))
+        (.get ann CoreAnnotations$SentencesAnnotation)))
+
+;;;
 (defrecord PerOperationResult [operation result])
 
 ;;;
@@ -199,6 +211,9 @@
     (mapv #(->PerOperationResult %
                                  (annotator-key->execute-operation % annotation))
           annotators-keys)))
+
+
+(defonce paragraph "Let's pause, and then reflect.")
 
 ;; (.prettyPrint pipeline annotation *out*)
 
