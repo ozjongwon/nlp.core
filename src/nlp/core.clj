@@ -39,11 +39,12 @@
    [clojure.string :refer [join]]
    [clojure.set :refer [intersection]]
    [nlp.utils :refer [find-in-coll make-keyword]]
-   [nlp.records :refer [make-token-result map->TokenizeResult map->LemmaResult TokenBasedResult
-                        token-ann->token-map]]
+   [nlp.records :refer [make-token-result TokenBasedResult get-result-prototype
+                        token-ann->token-map token-based-result->annotation-class]]
    ;;[camel-snake-kebab.core :refer [->camelCaseString]]
    )
   (:import
+   [nlp.records TokenizeResult LemmaResult NerResult]
    [java.util Properties]
    [clojure.lang Reflector]
    ;;[clojure.reflect Constructor]
@@ -63,7 +64,7 @@
    ;;[edu.stanford.nlp.international.spanish.process SpanishTokenizer]
 
    [edu.stanford.nlp.ling CoreAnnotations$SentencesAnnotation CoreAnnotations$TextAnnotation
-    CoreAnnotations$NamedEntityTagAnnotation CoreAnnotations$TokensAnnotation
+    CoreAnnotations$NamedEntityTagAnnotation
     CoreAnnotations$PartOfSpeechAnnotation CoreAnnotations$LemmaAnnotation
     CoreAnnotations$MentionsAnnotation CoreAnnotations$NamedEntityTagAnnotation
     CoreLabel TaggedWord Word SentenceUtils]
@@ -186,7 +187,9 @@
 ;;;;;;
 
 (defn- sentence-ann->token-based-result [sentence-ann result]
-  (->> (.get sentence-ann CoreAnnotations$TokensAnnotation)
+  (->> (token-based-result->annotation-class result)
+       ;;(.get sentence-ann CoreAnnotations$TokensAnnotation)
+       (.get sentence-ann)
        (mapv #(make-token-result result %))))
 
 (defn- annotation->token-based-results [ann result]
@@ -194,17 +197,18 @@
        (mapv #(sentence-ann->token-based-result % result))))
 
 (defmethod annotator-key->execute-operation :tokenize [k ann]
-  (annotation->token-based-results ann (map->TokenizeResult {})))
+  (annotation->token-based-results ann (get-result-prototype TokenizeResult)))
 
 ;; :lemma
 (def lemma-paragraph "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary.")
 
 (defmethod annotator-key->execute-operation :lemma [k ann]
-  (annotation->token-based-results ann (map->LemmaResult {})))
+  (annotation->token-based-results ann (get-result-prototype LemmaResult)))
 
 ;; :ner
 (def ner-paragraph "Joe was the last person to see Fred and Fred likes Joe. The latter has IBM computers and the former lives in Strathfield.")
 
+#_
 (defrecord NerResult [token begin end lemma]
   TokenBasedResult
   (make-token-result [this token-ann]
@@ -213,6 +217,8 @@
         (merge (token-ann->token-map token-ann)))))
 
 (defmethod annotator-key->execute-operation :ner [k ann]
+  (annotation->token-based-results ann (get-result-prototype NerResult))
+  #_
   (mapv (fn [sentence-ann]
           (let [mentions-ann (.get sentence-ann CoreAnnotations$MentionsAnnotation)]
             (zipmap (mapv #(.get % CoreAnnotations$TextAnnotation)

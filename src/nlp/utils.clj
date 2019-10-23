@@ -29,7 +29,8 @@
                      (->> (:name %)
                           (name)
                           (re-find #"^__")
-                          (not))))
+                          (not))
+                     (= (:flags %) #{:public :final})))
        (mapv :name)
        (set)))
 
