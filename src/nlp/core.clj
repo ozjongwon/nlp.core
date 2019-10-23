@@ -34,10 +34,15 @@
 ;;;  splits to sentences, and syntactic analysis by parsing
 ;;;
 (ns nlp.core
+  (:gen-class)
   (:require
-   [clojure.string :refer [join split lower-case]]
+   [clojure.string :refer [join]]
    [clojure.set :refer [intersection]]
-   [medley.core :refer [find-first]])
+   [nlp.utils :refer [find-in-coll make-keyword]]
+   [nlp.records :refer [make-token-result map->TokenizeResult map->LemmaResult TokenBasedResult
+                        token-ann->token-map]]
+   ;;[camel-snake-kebab.core :refer [->camelCaseString]]
+   )
   (:import
    [java.util Properties]
    [clojure.lang Reflector]
@@ -70,19 +75,12 @@
    [edu.stanford.nlp.parser.lexparser LexicalizedParser])
   (:gen-class :main true))
 
-;;;
-;;; Useful functions
-;;;
-(defn make-keyword [s]
-  (keyword (lower-case s)))
 
 
 ;;;
 ;;; StanfordCoreNLP Pipeline
 ;;; https://stanfordnlp.github.io/CoreNLP/annotators.html
 ;;;
-(defn find-in-coll [coll el]
-  (find-first #(= % el) coll))
 
 (defonce key->property-dependency
   {:tokenize []
@@ -175,7 +173,7 @@
 (defn- tree->pos [tree-node]
   (->> (.taggedLabeledYield tree-node)
        (mapv #(vector (.word %) (make-keyword (.tag %))))
-       (into (hash-map))))
+       (merge (hash-map))))
 
 (defmethod annotator-key->execute-operation :parse [k ann]
   (mapv #(let [tree-node (.get % TreeCoreAnnotations$TreeAnnotation)]
@@ -185,26 +183,34 @@
         ;; FIXME:
         ;; https://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/semgraph/SemanticGraph.html
         (.get ann CoreAnnotations$SentencesAnnotation)))
+;;;;;;
 
-;; :tokenize
-(defrecord TokenizeResult [token begin end])
+(defn- sentence-ann->token-based-result [sentence-ann result]
+  (->> (.get sentence-ann CoreAnnotations$TokensAnnotation)
+       (mapv #(make-token-result result %))))
+
+(defn- annotation->token-based-results [ann result]
+  (->> (.get ann CoreAnnotations$SentencesAnnotation)
+       (mapv #(sentence-ann->token-based-result % result))))
+
 (defmethod annotator-key->execute-operation :tokenize [k ann]
-  (mapv #(map->TokenizeResult {:token (.word %)
-                               :begin (.beginPosition %)
-                               :end (.endPosition %)})
-        (.get ann CoreAnnotations$TokensAnnotation)))
+  (annotation->token-based-results ann (map->TokenizeResult {})))
 
 ;; :lemma
 (def lemma-paragraph "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary.")
 
 (defmethod annotator-key->execute-operation :lemma [k ann]
-  (mapv #(mapv (fn [token-ann]
-                 (.get token-ann CoreAnnotations$LemmaAnnotation))
-               (.get % CoreAnnotations$TokensAnnotation))
-        (.get ann CoreAnnotations$SentencesAnnotation)))
+  (annotation->token-based-results ann (map->LemmaResult {})))
 
 ;; :ner
 (def ner-paragraph "Joe was the last person to see Fred and Fred likes Joe. The latter has IBM computers and the former lives in Strathfield.")
+
+(defrecord NerResult [token begin end lemma]
+  TokenBasedResult
+  (make-token-result [this token-ann]
+    (-> this
+        (assoc :ner (.get token-ann CoreAnnotations$LemmaAnnotation))
+        (merge (token-ann->token-map token-ann)))))
 
 (defmethod annotator-key->execute-operation :ner [k ann]
   (mapv (fn [sentence-ann]
