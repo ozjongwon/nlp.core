@@ -6,12 +6,13 @@
                       make-keyword]])
   (:import
    [edu.stanford.nlp.ling CoreAnnotations$LemmaAnnotation CoreAnnotations$TokensAnnotation
+    CoreAnnotations$PartOfSpeechAnnotation
     CoreAnnotations$MentionsAnnotation CoreAnnotations$TextAnnotation
     CoreAnnotations$TokenBeginAnnotation CoreAnnotations$TokenEndAnnotation
     CoreAnnotations$NamedEntityTagAnnotation
 
     ;; CoreAnnotations$SentencesAnnotation
-    ;; CoreAnnotations$PartOfSpeechAnnotation
+    ;;
     ;; CoreAnnotations$MentionsAnnotation CoreAnnotations$NamedEntityTagAnnotation
     ;; CoreLabel TaggedWord Word SentenceUtils
     ]
@@ -68,10 +69,19 @@
   (token-based-result->annotation-class [this]
     CoreAnnotations$TokensAnnotation))
 
-(defrecord LemmaResult [token begin end lemma]
+(defrecord PosResult [token begin end pos]
   TokenBasedResult
   (%make-token-result [this token-ann]
     (let [token-result (make-token-result TokenizeResult token-ann)
+          pos (.get token-ann CoreAnnotations$PartOfSpeechAnnotation)]
+      (merge this (assoc token-result :pos (make-keyword pos)))))
+  (token-based-result->annotation-class [this]
+    CoreAnnotations$TokensAnnotation))
+
+(defrecord LemmaResult [token begin end lemma]
+  TokenBasedResult
+  (%make-token-result [this token-ann]
+    (let [token-result (make-token-result PosResult token-ann)
           lemma (.get token-ann CoreAnnotations$LemmaAnnotation)]
       (if (or (nil? lemma) (= (:token token-result) lemma))
         token-result
@@ -80,14 +90,14 @@
     CoreAnnotations$TokensAnnotation))
 
 ;;; NerResult may have TokenNerResult which does not have lemma
-;;; So the result can be: TokenizeResult, TokenNerResult, or NerResult
-(defrecord TokenizeNerResult [token begin end ner])
+;;; So the result can be: PosResult TokenNerResult, or NerResult
+(defrecord PosNerResult [token begin end pos ner])
 
-(defrecord LemmaNerResult [token begin end lemma ner])
+(defrecord LemmaNerResult [token begin end pos lemma ner])
 
 (defn- get-ner-map-constructor [token-result]
   (condp = (class token-result)
-    TokenizeResult  map->TokenizeNerResult
+    PosResult  map->PosNerResult
     LemmaResult map->LemmaNerResult))
 
 (defn- make-ner-result [mention-ann]

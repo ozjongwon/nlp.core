@@ -33,6 +33,45 @@
 ;;;  (aka text analytics). Ex) annotators == :tokenize :ssplit :parse ==> tokenize,
 ;;;  splits to sentences, and syntactic analysis by parsing
 ;;;
+;;; POS - https://www.ling.upenn.edu/courses/Fall_2003/ling001/penn_treebank_pos.html
+;;; - CC - Coordinating conjunction
+;;; - CD - Cardinal number
+;;; - DT - Determiner
+;;; - DT - Determiner
+;;; - EX - Existential there
+;;; - FW - Foreign word
+;;; - IN - Preposition or subordinating conjunction
+;;; - JJ - Adjective
+;;; - JJR -Adjective, comparative
+;;; - JJS - Adjective, superlative
+;;; - LS - List item marker
+;;; - MD - Modal
+;;; - NN - Noun, singular, or mass
+;;; - NNP - Proper noun, singular
+;;; - NNPS - Proper noun, plural
+;;; - NNS - Noun, plural
+;;; - PDT - Predeterminer
+;;; - POS - Possessive ending
+;;; - PRP - Personal pronoun
+;;; - PRP$ - Possessive pronoun
+;;; - RB - Adverb
+;;; - RBR - Adverb, comparative
+;;; - RBS - Adverb, superlative
+;;; - RP - Particle
+;;; - SYM - Symbol
+;;; - TO - To
+;;; - UH - Interjection
+;;; - VB - Verb, base form
+;;; - VBD - Verb, past tense
+;;; - VBG - Verb, gerunds or present participle
+;;; - VBN - Verb, past participle
+;;; - VBP - Verb, non-third person singular present
+;;; - VBZ - Verb, third person singular present
+;;; - WDT - Wh-determiner
+;;; - WP - Wh-pronoun
+;;; - WP$ - Possessive wh-pronoun
+;;; - WRB- Wh-adverb
+;;;
 (ns nlp.core
   (:gen-class)
   (:require
@@ -42,7 +81,7 @@
    [nlp.records :refer [make-token-result TokenBasedResult get-result-prototype
                         token-ann->token-map token-based-result->annotation-class]])
   (:import
-   [nlp.records TokenizeResult LemmaResult NerResult]
+   [nlp.records TokenizeResult PosResult LemmaResult NerResult]
    [java.util Properties]
    [clojure.lang Reflector]
    ;;[clojure.reflect Constructor]
@@ -195,6 +234,10 @@
 
 (defmethod annotator-key->execute-operation :tokenize [k ann]
   (annotation->token-based-results ann TokenizeResult))
+
+;; :pos
+(defmethod annotator-key->execute-operation :pos [k ann]
+  (annotation->token-based-results ann PosResult))
 
 ;; :lemma
 (def lemma-paragraph "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary.")
