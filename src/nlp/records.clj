@@ -25,6 +25,11 @@
                             "'"  :sqe ;; single quote end
                             "-LRB-" :op ;; open paren
                             "-RRB-" :cp ;; close paren
+                            "." :fs ;; full stop
+                            "?" :q
+                            "!" :e ;; exclamation mark
+                            "..." :ep ;; Ellipsis points
+                            ":" :c ;; colon
                             })
 (defn- token-or-special-token [token]
   (or (get special-token-map token) token))
