@@ -103,37 +103,5 @@
   (%make-token-result [this mention-ann]
     (make-ner-result mention-ann))
   (token-based-result->annotation-class [this]
-    CoreAnnotations$TokensAnnotation
-    #_
-    CoreAnnotations$MentionsAnnotation))
+    CoreAnnotations$TokensAnnotation))
 
-;;; Record extension
-#_
-(defmacro def-tokenize-based-record [keys & protocol-impl-fns]
-  (let [fields (->> (set keys) (sort) (mapv #(-> (name %) (symbol))))
-        record-name (fields->record-name-symbol fields "Result")
-        base-field-set (find-record-field-set TokenizeResult)]
-    `(when-not (resolve '~record-name)
-       (defrecord ~record-name ~(->> (union base-field-set fields)
-                                     (vec))
-         TokenBasedResult
-         ~@protocol-impl-fns))))
-
-#_
-(def-tokenize-based-record [:lemma]
-  (%make-token-result [this token-ann]
-                     (let [token-map (token-ann->token-map token-ann)
-                           lemma (.get token-ann CoreAnnotations$LemmaAnnotation)]
-                       (if (= (:token token-map) lemma)
-                         (map->TokenizeResult token-map)
-                         (merge this (assoc token-map :lemma lemma)))))
-  (token-based-result->annotation-class [this]
-                                        CoreAnnotations$TokensAnnotation))
-#_
-(def-tokenize-based-record [:ner]
-  (%make-token-result [this token-ann]
-                     (-> this
-                         (assoc :ner (.get token-ann CoreAnnotations$LemmaAnnotation))
-                         (merge (token-ann->token-map token-ann))))
-  (token-based-result->annotation-class [this]
-                                        CoreAnnotations$TokensAnnotation))

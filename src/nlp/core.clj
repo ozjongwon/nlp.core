@@ -207,26 +207,8 @@
 ;; :ner
 (def ner-paragraph "Joe was the last person to see Fred and Fred likes Joe. The latter has IBM computers and the former lives in Strathfield.")
 
-#_
-(defrecord NerResult [token begin end lemma]
-  TokenBasedResult
-  (make-token-result [this token-ann]
-    (-> this
-        (assoc :ner (.get token-ann CoreAnnotations$LemmaAnnotation))
-        (merge (token-ann->token-map token-ann)))))
-
 (defmethod annotator-key->execute-operation :ner [k ann]
-  (annotation->token-based-results ann NerResult)
-  #_
-  (mapv (fn [sentence-ann]
-          (let [mentions-ann (.get sentence-ann CoreAnnotations$MentionsAnnotation)]
-            (zipmap (mapv #(.get % CoreAnnotations$TextAnnotation)
-                          mentions-ann)
-                    (mapv #(make-keyword (.get % CoreAnnotations$NamedEntityTagAnnotation))
-                          mentions-ann))))
-        (.get ann CoreAnnotations$SentencesAnnotation)))
-
-
+  (annotation->token-based-results ann NerResult))
 
 ;;;
 (defrecord PerOperationResult [operation result])
@@ -241,7 +223,6 @@
     (mapv #(->PerOperationResult %
                                  (annotator-key->execute-operation % annotation))
           annotators-keys)))
-
 
 (defonce paragraph "Let's pause, and then reflect.")
 
