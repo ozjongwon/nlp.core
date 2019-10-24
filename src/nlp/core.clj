@@ -186,24 +186,23 @@
         (.get ann CoreAnnotations$SentencesAnnotation)))
 ;;;;;;
 
-(defn- sentence-ann->token-based-result [sentence-ann result]
-  (->> (token-based-result->annotation-class result)
-       ;;(.get sentence-ann CoreAnnotations$TokensAnnotation)
+(defn- sentence-ann->token-based-result [sentence-ann result-class]
+  (->> (token-based-result->annotation-class (get-result-prototype result-class))
        (.get sentence-ann)
-       (mapv #(make-token-result result %))))
+       (mapv #(make-token-result result-class %))))
 
-(defn- annotation->token-based-results [ann result]
+(defn- annotation->token-based-results [ann result-class]
   (->> (.get ann CoreAnnotations$SentencesAnnotation)
-       (mapv #(sentence-ann->token-based-result % result))))
+       (mapv #(sentence-ann->token-based-result % result-class))))
 
 (defmethod annotator-key->execute-operation :tokenize [k ann]
-  (annotation->token-based-results ann (get-result-prototype TokenizeResult)))
+  (annotation->token-based-results ann TokenizeResult))
 
 ;; :lemma
 (def lemma-paragraph "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary.")
 
 (defmethod annotator-key->execute-operation :lemma [k ann]
-  (annotation->token-based-results ann (get-result-prototype LemmaResult)))
+  (annotation->token-based-results ann LemmaResult))
 
 ;; :ner
 (def ner-paragraph "Joe was the last person to see Fred and Fred likes Joe. The latter has IBM computers and the former lives in Strathfield.")
@@ -217,7 +216,7 @@
         (merge (token-ann->token-map token-ann)))))
 
 (defmethod annotator-key->execute-operation :ner [k ann]
-  (annotation->token-based-results ann (get-result-prototype NerResult))
+  (annotation->token-based-results ann NerResult)
   #_
   (mapv (fn [sentence-ann]
           (let [mentions-ann (.get sentence-ann CoreAnnotations$MentionsAnnotation)]

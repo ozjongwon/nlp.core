@@ -42,45 +42,49 @@
 ;;;
 
 (defprotocol TokenBasedResult
-  (make-token-result [this token-ann])
+  (%make-token-result [this token-ann])
   (token-based-result->annotation-class [this]))
 
 (defonce result-prototypes (atom {}))
 
 (defmacro get-result-prototype [result-type]
   `(or (get @result-prototypes ~result-type)
-       (let [prototype# (. ~result-type create {})]
+       (let [prototype# (eval `(. ~~result-type create {}))]
          (swap! result-prototypes assoc ~result-type prototype#)
          prototype#)))
 
+(defn make-token-result [proto-class token-ann]
+  (%make-token-result (get-result-prototype proto-class) token-ann))
+
 (defrecord TokenizeResult [token begin end]
   TokenBasedResult
-  (make-token-result [this token-ann]
+  (%make-token-result [this token-ann]
     (merge this (token-ann->token-map token-ann)))
   (token-based-result->annotation-class [this]
     CoreAnnotations$TokensAnnotation))
 
 (defrecord LemmaResult [token begin end lemma]
   TokenBasedResult
-  (make-token-result [this token-ann]
-    (let [token-map (token-ann->token-map token-ann)
+  (%make-token-result [this token-ann]
+    (let [token-result (make-token-result TokenizeResult token-ann)
           lemma (.get token-ann CoreAnnotations$LemmaAnnotation)]
-      (if (= (:token token-map) lemma)
-        (map->TokenizeResult token-map)
-        (merge this (assoc token-map :lemma lemma)))))
+      (if (= (:token token-result) lemma)
+        token-result
+        (merge this (assoc token-result :lemma lemma)))))
   (token-based-result->annotation-class [this]
     CoreAnnotations$TokensAnnotation))
 
-(defrecord LemmaResult [token begin end lemma]
+(defrecord NerResult [token begin end lemma]
   TokenBasedResult
-  (make-token-result [this token-ann]
+  (%make-token-result [this token-ann]
+    (let [token-based-result (make-token-result LemmaResult token-ann)])
     ;; FIXME
     (merge this (token-ann->token-map token-ann)))
   (token-based-result->annotation-class [this]
     CoreAnnotations$TokensAnnotation))
 
 ;;; Record extension
-
+#_
 (defmacro def-tokenize-based-record [keys & protocol-impl-fns]
   (let [fields (->> (set keys) (sort) (mapv #(-> (name %) (symbol))))
         record-name (fields->record-name-symbol fields "Result")
@@ -91,9 +95,9 @@
          TokenBasedResult
          ~@protocol-impl-fns))))
 
-
+#_
 (def-tokenize-based-record [:lemma]
-  (make-token-result [this token-ann]
+  (%make-token-result [this token-ann]
                      (let [token-map (token-ann->token-map token-ann)
                            lemma (.get token-ann CoreAnnotations$LemmaAnnotation)]
                        (if (= (:token token-map) lemma)
@@ -101,9 +105,9 @@
                          (merge this (assoc token-map :lemma lemma)))))
   (token-based-result->annotation-class [this]
                                         CoreAnnotations$TokensAnnotation))
-
+#_
 (def-tokenize-based-record [:ner]
-  (make-token-result [this token-ann]
+  (%make-token-result [this token-ann]
                      (-> this
                          (assoc :ner (.get token-ann CoreAnnotations$LemmaAnnotation))
                          (merge (token-ann->token-map token-ann))))
