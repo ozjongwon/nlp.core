@@ -72,6 +72,17 @@
 ;;; - WP$ - Possessive wh-pronoun
 ;;; - WRB- Wh-adverb
 ;;;
+;;; * Classifier
+;;; https://nlp.stanford.edu/wiki/Software/Classifier
+;;;
+;;;-----------------------------------------------------------------
+;;; * Design & Implementation
+;;;
+;;; - Operation based, and operations are 'Annotations'
+;;; - Operations have different levels to perform operation:
+;;;   -- Token level - :tokenize, :pos, :lemma, :ner
+;;;   -- Sentence level - :sentiment
+;;;
 (ns nlp.core
   (:gen-class)
   (:require
@@ -180,7 +191,12 @@
                  annotators-opts-set))
        @existing-core-nlp
        (let [new-core-nlp (StanfordCoreNLP. (doto (Properties.)
-                                              (.put "annotators" (join \, annotators-opts)))
+                                              (.put "annotators" (join \, annotators-opts))
+                                              ;; A custom model example
+                                              ;; jar tf stanford-corenlp-3.9.2-models.jar
+                                              ;; edu/stanford/nlp/models/pos-tagger/english-left3words/english-left3words-distsim.tagger
+                                              ;; (.put "pos.model"  "edu/stanford/nlp/models/pos-tagger/english-left3words/english-left3words-distsim.tagger")
+                                              )
                                             true)]
          (reset! existing-core-nlp new-core-nlp)
          (reset! existing-opts-set annotators-opts-set)
@@ -256,6 +272,16 @@
 
 (defmethod annotator-key->execute-operation :ner [k ann]
   (annotation->token-based-results ann NerResult))
+
+;;;FIXME: YOU'RE HERE
+;;; Sentence based
+;;;
+(defn- annotation->sentence-based-results [ann result-class]
+  (->> (.get ann CoreAnnotations$SentencesAnnotation)
+       (mapv #(sentence-ann->sentence-based-result % result-class))))
+
+(defmethod annotator-key->execute-operation :sentiment [k ann]
+  (annotation->sentence-based-results ann SentimentResult))
 
 ;;;
 (defrecord PerOperationResult [operation result])

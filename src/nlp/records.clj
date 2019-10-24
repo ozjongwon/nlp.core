@@ -134,3 +134,14 @@
   (token-based-result->annotation-class [this]
     CoreAnnotations$TokensAnnotation))
 
+;; FIXME: YOU'RE HERE
+(defrecord SentimentResult [score]
+  SentenceBasedResult
+  (%make-token-result [this token-ann]
+    (let [token-result (make-token-result PosResult token-ann)
+          lemma (.get token-ann CoreAnnotations$LemmaAnnotation)]
+      (if (or (nil? lemma) (= (:token token-result) lemma))
+        token-result
+        (merge this (assoc token-result :lemma lemma)))))
+  (token-based-result->annotation-class [this]
+    CoreAnnotations$TokensAnnotation))
