@@ -19,8 +19,21 @@
    ))
 
 ;;; Protocols, records, etc
+(defonce special-token-map {"``" :dqs ;; double quote start
+                            "''" :dqe ;; double quote end
+                            "`"  :sqs ;; single quote start
+                            "'"  :sqe ;; single quote end
+                            "-LRB-" :op ;; open paren
+                            "-RRB-" :cp ;; close paren
+                            })
+(defn- token-or-special-token [token]
+  (or (get special-token-map token) token))
+
+(defn- token-ann->token [token-ann]
+  (token-or-special-token (.get token-ann CoreAnnotations$TextAnnotation)))
+
 (defn token-ann->token-map [token-ann]
-  {:token (.get token-ann CoreAnnotations$TextAnnotation) ;;(.word token-ann)
+  {:token (token-ann->token token-ann) ;;(.word token-ann)
    :begin (.get token-ann CoreAnnotations$TokenBeginAnnotation) ;;(.beginPosition token-ann)
    :end (.get token-ann CoreAnnotations$TokenEndAnnotation) ;;(.endPosition token-ann)
    })
@@ -74,7 +87,7 @@
   (%make-token-result [this token-ann]
     (let [token-result (make-token-result TokenizeResult token-ann)
           pos (.get token-ann CoreAnnotations$PartOfSpeechAnnotation)]
-      (merge this (assoc token-result :pos (make-keyword pos)))))
+      (merge this (assoc token-result :pos (or (get special-token-map pos) (make-keyword pos))))))
   (token-based-result->annotation-class [this]
     CoreAnnotations$TokensAnnotation))
 

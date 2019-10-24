@@ -242,6 +242,10 @@
 ;; :lemma
 (def lemma-paragraph "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary.")
 
+(def pos-paragraph "Bill used the force to force the manger to tear the bill in two.")
+(def pos-paragraph2 "AFAIK she H8 cth! BTW had a GR8 tym at the party BBIAM.")
+(def pos-paragraph3 "Whether \"Blue\" was correct or not (it's not) is debatable.")
+
 (defmethod annotator-key->execute-operation :lemma [k ann]
   (annotation->token-based-results ann LemmaResult))
 
