@@ -246,6 +246,8 @@
 (def pos-paragraph2 "AFAIK she H8 cth! BTW had a GR8 tym at the party BBIAM.")
 (def pos-paragraph3 "Whether \"Blue\" was correct or not (it's not) is debatable.")
 
+(def pos-paragraph4 "The voyage of the Abraham Lincoln was for a long time marked by no special incident. But one circumstance happened which showed the wonderful dexterity of Ned Land, and proved what confidence we might place in him. The 30th of June, the frigate spoke some American whalers, from whom we learned that they knew nothing about the narwhal. But one of them, the captain of the Monroe, knowing that Ned Land had shipped on board the Abraham Lincoln, begged for his help in chasing a whale they had in sight.")
+
 (defmethod annotator-key->execute-operation :lemma [k ann]
   (annotation->token-based-results ann LemmaResult))
 

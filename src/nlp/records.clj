@@ -19,17 +19,18 @@
    ))
 
 ;;; Protocols, records, etc
-(defonce special-token-map {"``" :dqs ;; double quote start
-                            "''" :dqe ;; double quote end
-                            "`"  :sqs ;; single quote start
-                            "'"  :sqe ;; single quote end
-                            "-LRB-" :op ;; open paren
-                            "-RRB-" :cp ;; close paren
-                            "." :fs ;; full stop
-                            "?" :q
-                            "!" :e ;; exclamation mark
-                            "..." :ep ;; Ellipsis points
-                            ":" :c ;; colon
+(defonce special-token-map {"``" :double-quote-start
+                            "''" :double-quote-end
+                            "`"  :single-quote-start
+                            "'"  :single-quote-end
+                            "-LRB-" :open-paren
+                            "-RRB-" :close-paren
+                            "." :full-stop
+                            "?" :question-mark
+                            "!" :exclamation-mark
+                            "..." :ellipsis-points
+                            ":" :colon
+                            "," :comma
                             })
 (defn- token-or-special-token [token]
   (or (get special-token-map token) token))
