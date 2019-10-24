@@ -2,7 +2,8 @@
   (:require
    [clojure.string :refer [lower-case capitalize]]
    [clojure.reflect :refer [type-reflect]]
-   [medley.core :refer [find-first]]))
+   [medley.core :refer [find-first]]
+   [camel-snake-kebab.core :refer [->kebab-case-keyword]]))
 
 ;;;
 ;;; Useful functions
@@ -11,7 +12,7 @@
   (find-first #(= % el) coll))
 
 (defn make-keyword [s]
-  (keyword (lower-case s)))
+  (->kebab-case-keyword s))
 
 (defmacro find-record [x]
   `(resolve '~x))

@@ -40,9 +40,7 @@
    [clojure.set :refer [intersection]]
    [nlp.utils :refer [find-in-coll make-keyword]]
    [nlp.records :refer [make-token-result TokenBasedResult get-result-prototype
-                        token-ann->token-map token-based-result->annotation-class]]
-   ;;[camel-snake-kebab.core :refer [->camelCaseString]]
-   )
+                        token-ann->token-map token-based-result->annotation-class]])
   (:import
    [nlp.records TokenizeResult LemmaResult NerResult]
    [java.util Properties]
@@ -205,7 +203,7 @@
   (annotation->token-based-results ann LemmaResult))
 
 ;; :ner
-(def ner-paragraph "Joe was the last person to see Fred and Fred likes Joe. The latter has IBM computers and the former lives in Strathfield.")
+(def ner-paragraph "Joe was the last person to see Fred. He saw him in Boston at McKenzie's pub at 3:00 where he paid $2.45 for an ale. Joe wanted to go to Vermont for the day to visit a cousin who works at IBM, but Sally and he had to look for Fred.")
 
 (defmethod annotator-key->execute-operation :ner [k ann]
   (annotation->token-based-results ann NerResult))
