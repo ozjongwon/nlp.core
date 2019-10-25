@@ -35,3 +35,44 @@
        (mapv :name)
        (set)))
 
+;;;;;;;;;;;;;;;;;;;;;;
+;;; [#{1} #{2} #{3} #{4}]
+;;; =>   #{1}   [#{2} #{3} #{4}]
+;;; ==>  #{2}   [#{3} #{4}]
+;;; ===> #{3}   [#{4}]
+;;; <=== #{3 4}
+;;; <==  #{2 3} #{2 4}
+;;; <=   #{1 2} #{1 3} #{1 4}
+;;;
+;;; [#{1 2} #{1 3} #{1 4} #{2 3} #{2 4} #{3 4}      #{1} #{2} #{3} #{4}]
+;;;
+;;; [#{1 2} #{1 3} #{1 4} #{2 3} #{2 4} #{3 4}]
+;;; => #{1 2} [#{3} #{4}]
+;;; <= #{1 2 3} #{1 2 4}
+;;; => #{1 3} [#{4}]
+;;; <= #{1 3 4}
+;;;
+;;;[#{1 2 3} #{1 2 4} #{1 3 4}]
+;;;=> #{1 2 3} [#{4}]
+;;;<= #{1 2 3 4}
+
+(defn non-empty-subsets
+  ([s]
+   {:pre [(set? s)]}
+   (let [result (mapv hash-set s)]
+     (non-empty-subsets result (rest result) (rest result) [] result)))
+  ([[seed-set & more-sets] target-sets init-targets collected-subsets result]
+   (cond (and (empty? target-sets) (empty? collected-subsets)) result
+         (empty? target-sets) (recur collected-subsets
+                                     (rest init-targets)
+                                     (rest init-targets)
+                                     []
+                                     (apply conj result collected-subsets))
+         :else (let [subsets (mapv #(apply conj seed-set %) target-sets)]
+                 (recur more-sets
+                        (rest target-sets)
+                        init-targets
+                        (apply conj collected-subsets subsets)
+                        result)))))
+
+
