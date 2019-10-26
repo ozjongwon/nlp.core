@@ -17,13 +17,6 @@
 (defmacro find-record [x]
   `(resolve '~x))
 
-(defn fields->record-name-symbol [symv postfix]
-  {:pre [(vector? symv)]}
-  (->> (conj symv postfix)
-       (mapv #(-> (name %) (capitalize)))
-       (apply str)
-       (symbol)))
-
 (defn find-record-field-set [record]
   (->> (:members (type-reflect record))
        (filter #(and (= (:type %) 'java.lang.Object)
@@ -35,44 +28,37 @@
        (mapv :name)
        (set)))
 
+(defn multiple-nth [v indexes]
+  (mapv #(nth v %) indexes))
+
 ;;;;;;;;;;;;;;;;;;;;;;
-;;; [#{1} #{2} #{3} #{4}]
-;;; =>   #{1}   [#{2} #{3} #{4}]
-;;; ==>  #{2}   [#{3} #{4}]
-;;; ===> #{3}   [#{4}]
-;;; <=== #{3 4}
-;;; <==  #{2 3} #{2 4}
-;;; <=   #{1 2} #{1 3} #{1 4}
-;;;
-;;; [#{1 2} #{1 3} #{1 4} #{2 3} #{2 4} #{3 4}      #{1} #{2} #{3} #{4}]
-;;;
-;;; [#{1 2} #{1 3} #{1 4} #{2 3} #{2 4} #{3 4}]
-;;; => #{1 2} [#{3} #{4}]
-;;; <= #{1 2 3} #{1 2 4}
-;;; => #{1 3} [#{4}]
-;;; <= #{1 3 4}
-;;;
-;;;[#{1 2 3} #{1 2 4} #{1 3 4}]
-;;;=> #{1 2 3} [#{4}]
-;;;<= #{1 2 3 4}
-
-(defn non-empty-subsets
-  ([s]
-   {:pre [(set? s)]}
-   (let [result (mapv hash-set s)]
-     (non-empty-subsets result (rest result) (rest result) [] result)))
-  ([[seed-set & more-sets] target-sets init-targets collected-subsets result]
-   (cond (and (empty? target-sets) (empty? collected-subsets)) result
-         (empty? target-sets) (recur collected-subsets
-                                     (rest init-targets)
-                                     (rest init-targets)
-                                     []
-                                     (apply conj result collected-subsets))
-         :else (let [subsets (mapv #(apply conj seed-set %) target-sets)]
-                 (recur more-sets
-                        (rest target-sets)
-                        init-targets
-                        (apply conj collected-subsets subsets)
-                        result)))))
-
-
+;; 0001 0010 0100 1000 [0] [1] [2] [3]
+;; =>
+;; 0011 0101 1001 [0 1] [0 2] [0 3]
+;; 0110 1010      [1 2] [1 3]
+;; 1100           [2 3]
+;; =>
+;; 0111 1011      [0 1 2] [0 1 3]
+;; 1101           [0 2 3]
+;; 1110           [1 2 3]
+;; =>
+;; 1111           [0 1 2 3]
+;;
+(defn non-empty-subsets [col]
+  (let [n (count col)]
+    (letfn [(subset-position->next-positions
+              ([]
+               (mapv #(vector %) (range n)))
+              ([pos-group]
+               (mapv (fn [new-index]
+                       (conj pos-group new-index))
+                     (range (inc (last pos-group)) n))))]
+      (loop [position-groups (subset-position->next-positions)
+             result []]
+        (if (empty? position-groups)
+          result
+          (let [next-position-groups (mapcat (fn [group]
+                                               (subset-position->next-positions group))
+                                             position-groups)]
+            (recur next-position-groups
+                   (concat result (mapv #(multiple-nth col %) position-groups)))))))))
