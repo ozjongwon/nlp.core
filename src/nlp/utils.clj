@@ -44,7 +44,7 @@
 ;; =>
 ;; 1111           [0 1 2 3]
 ;;
-(defn non-empty-subsets [col]
+(defn powerset [col]
   (let [n (count col)]
     (letfn [(subset-position->next-positions
               ([]
@@ -54,7 +54,7 @@
                        (conj pos-group new-index))
                      (range (inc (last pos-group)) n))))]
       (loop [position-groups (subset-position->next-positions)
-             result []]
+             result [nil]]
         (if (empty? position-groups)
           result
           (let [next-position-groups (mapcat (fn [group]

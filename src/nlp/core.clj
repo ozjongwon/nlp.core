@@ -89,8 +89,13 @@
    [clojure.string :refer [join]]
    [clojure.set :refer [intersection]]
    [nlp.utils :refer [find-in-coll make-keyword]]
-   [nlp.records :refer [make-token-result TokenBasedResult get-result-prototype
-                        token-ann->token-map token-based-result->annotation-class]])
+   [nlp.records :refer [make-operation-result TokenBasedResult get-result-prototype
+                        token-ann->token-map prototype->annotation-class
+                        operation-keys->result-record prototype->make-operation-result
+                        key->property-dependency]]
+   [medley.core :refer [find-first
+                        ;;assoc-some
+                        ]])
   (:import
    [nlp.records TokenizeResult PosResult LemmaResult NerResult]
    [java.util Properties]
@@ -130,24 +135,6 @@
 ;;; StanfordCoreNLP Pipeline
 ;;; https://stanfordnlp.github.io/CoreNLP/annotators.html
 ;;;
-
-(defonce key->property-dependency
-  {:tokenize []
-   :docdate []
-   :cleanxml ["tokenize"]
-   :ssplit ["tokenize"]                 ; sentence detection
-   :pos ["tokenize" "ssplit"]
-   :parse ["tokenize" "ssplit"]
-   :lemma ["tokenize" "ssplit" "pos"]
-   :regexner ["tokenize" "ssplit" "pos"]
-   :depparse ["tokenize" "ssplit" "pos"]
-   :ner ["tokenize" "ssplit" "pos" "lemma"] ; Named Entity Recognition
-   :entitylink ["tokenize" "ssplit" "pos" "lemma"  "ner"]
-   :sentiment ["tokenize" "ssplit" "pos" "parse"]
-   :dcoref ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"]
-   :coref ["tokenize" "ssplit" "pos" "lemma"  "ner"]
-   :kbp ["tokenize" "ssplit" "pos" "lemma"]
-   :quote ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"]})
 
 (defn- %check-parse-dependeny-when-opt [args opt]
   (when (find-in-coll args opt)
@@ -202,9 +189,6 @@
          (reset! existing-opts-set annotators-opts-set)
          new-core-nlp)))))
 
-;;; Operations
-(defmulti annotator-key->execute-operation (fn [k _] k))
-
 ;; :parse
 (defrecord ParseResult [tree pos dependency])
 
@@ -229,31 +213,21 @@
        (mapv #(vector (.word %) (make-keyword (.tag %))))
        (merge (hash-map))))
 
-(defmethod annotator-key->execute-operation :parse [k ann]
-  (mapv #(let [tree-node (.get % TreeCoreAnnotations$TreeAnnotation)]
-           (map->ParseResult {:tree (tree->parse-tree tree-node)
-                              :pos (tree->pos tree-node)
-                              :dependency (.get % SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation)}))
-        ;; FIXME:
-        ;; https://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/semgraph/SemanticGraph.html
-        (.get ann CoreAnnotations$SentencesAnnotation)))
-;;;;;;
-
-(defn- sentence-ann->token-based-result [sentence-ann result-class]
-  (->> (token-based-result->annotation-class (get-result-prototype result-class))
+(defn- sentence-ann->token-based-result [result-class subkeys sentence-ann]
+  (->>
        (.get sentence-ann)
-       (mapv #(make-token-result result-class %))))
+       (mapv #(make-operation-result result-class subkeys %))))
 
-(defn- annotation->token-based-results [ann result-class]
-  (->> (.get ann CoreAnnotations$SentencesAnnotation)
-       (mapv #(sentence-ann->token-based-result % result-class))))
-
-(defmethod annotator-key->execute-operation :tokenize [k ann]
-  (annotation->token-based-results ann TokenizeResult))
-
-;; :pos
-(defmethod annotator-key->execute-operation :pos [k ann]
-  (annotation->token-based-results ann PosResult))
+(defn- execute-token-based-operations [key-set ann]
+  (let [result-class (operation-keys->result-record key-set)
+        prototype (get-result-prototype result-class)
+        tokens-ann-class (prototype->annotation-class prototype)]
+    (mapv (fn [sentence]
+            (mapv #(prototype->make-operation-result prototype %
+                                                     ;;make-operation-result result-class %
+                                                     )
+                  (.get sentence tokens-ann-class)))
+          (.get ann CoreAnnotations$SentencesAnnotation))))
 
 ;; :lemma
 (def lemma-paragraph "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary.")
@@ -264,38 +238,43 @@
 
 (def pos-paragraph4 "The voyage of the Abraham Lincoln was for a long time marked by no special incident. But one circumstance happened which showed the wonderful dexterity of Ned Land, and proved what confidence we might place in him. The 30th of June, the frigate spoke some American whalers, from whom we learned that they knew nothing about the narwhal. But one of them, the captain of the Monroe, knowing that Ned Land had shipped on board the Abraham Lincoln, begged for his help in chasing a whale they had in sight.")
 
-(defmethod annotator-key->execute-operation :lemma [k ann]
-  (annotation->token-based-results ann LemmaResult))
-
 ;; :ner
 (def ner-paragraph "Joe was the last person to see Fred. He saw him in Boston at McKenzie's pub at 3:00 where he paid $2.45 for an ale. Joe wanted to go to Vermont for the day to visit a cousin who works at IBM, but Sally and he had to look for Fred.")
 
-(defmethod annotator-key->execute-operation :ner [k ann]
-  (annotation->token-based-results ann NerResult))
 
 ;;;FIXME: YOU'RE HERE
 ;;; Sentence based
 ;;;
 (defn- annotation->sentence-based-results [ann result-class]
+  #_
   (->> (.get ann CoreAnnotations$SentencesAnnotation)
        (mapv #(sentence-ann->sentence-based-result % result-class))))
 
-(defmethod annotator-key->execute-operation :sentiment [k ann]
-  (annotation->sentence-based-results ann SentimentResult))
+(defrecord AnalyseResult [token sentence])
+;;; FIXME: move to the top of this file??
+(defonce operation-level {:tokenize :token
+                          :pos :token
+                          :lemma :token
+                          :ner :token
+                          :sentiment :sentence
+                          ;; FIXME add more!
+                          })
 
-;;;
-(defrecord PerOperationResult [operation result])
+(defn annotators-keys->op-dispatch-set [annotators-keys]
+  (reduce-kv #(assoc %1 %2 (set %3)) {} (group-by operation-level annotators-keys)))
 
 ;;;
 ;;; Main function
 ;;;
 (defn analyse-text [text & annotators-keys]
   (let [annotation (Annotation. text)
-        pipeline (apply make-pipeline annotators-keys)]
+        pipeline (apply make-pipeline annotators-keys)
+        {:keys [token sentence]} (annotators-keys->op-dispatch-set annotators-keys)]
     (.annotate pipeline annotation) ;; side effect
-    (mapv #(->PerOperationResult %
-                                 (annotator-key->execute-operation % annotation))
-          annotators-keys)))
+    (->AnalyseResult (execute-token-based-operations token annotation)
+                     1
+                     #_
+                     (execute-sentence-based-operations  annotation))))
 
 (defonce paragraph "Let's pause, and then reflect.")
 
