@@ -18,11 +18,30 @@
     ]
    ))
 
-(defrecord AnnotationInfo [key dependency annotation-class result-converter])
+(defrecord AnnotationInfo [key dependency annotation-class result-converter
+                           ;; FIXME: operation-level - sentence, token, etc
+                           ])
+
+(defonce special-token-map {"``" :double-quote-start
+                            "''" :double-quote-end
+                            "`"  :single-quote-start
+                            "'"  :single-quote-end
+                            "-LRB-" :open-paren
+                            "-RRB-" :close-paren
+                            "." :full-stop
+                            "?" :question-mark
+                            "!" :exclamation-mark
+                            "..." :ellipsis-points
+                            ":" :colon
+                            "," :comma
+                            })
 
 (defn- remove-other-ner-value [ner-val]
   (when-not (= ner-val "O")
     ner-val))
+
+(defn- transform-special-value [val] ;; for pos or lemma
+  (or (get special-token-map val) val))
 
 (defonce annotation-info-vector
   (let [infov (mapv #(apply ->AnnotationInfo %)
@@ -30,9 +49,11 @@
                      [:docdate [] nil nil]
                      [:cleanxml ["tokenize"] nil nil]
                      [:ssplit ["tokenize"] nil nil]
-                     [:pos ["tokenize" "ssplit"] CoreAnnotations$PartOfSpeechAnnotation nil]
+                     [:pos ["tokenize" "ssplit"]
+                      CoreAnnotations$PartOfSpeechAnnotation transform-special-value]
                      [:parse ["tokenize" "ssplit"] nil nil]
-                     [:lemma ["tokenize" "ssplit" "pos"] CoreAnnotations$LemmaAnnotation nil]
+                     [:lemma ["tokenize" "ssplit" "pos"]
+                      CoreAnnotations$LemmaAnnotation transform-special-value]
                      [:regexner ["tokenize" "ssplit" "pos"] nil nil]
                      [:depparse ["tokenize" "ssplit" "pos"] nil nil]
                      [:ner ["tokenize" "ssplit" "pos" "lemma"]
@@ -73,19 +94,7 @@
         ks))
 
 ;;; Protocols, records, etc
-(defonce special-token-map {"``" :double-quote-start
-                            "''" :double-quote-end
-                            "`"  :single-quote-start
-                            "'"  :single-quote-end
-                            "-LRB-" :open-paren
-                            "-RRB-" :close-paren
-                            "." :full-stop
-                            "?" :question-mark
-                            "!" :exclamation-mark
-                            "..." :ellipsis-points
-                            ":" :colon
-                            "," :comma
-                            })
+
 (defn- token-or-special-token [token]
   (or (get special-token-map token) token))
 

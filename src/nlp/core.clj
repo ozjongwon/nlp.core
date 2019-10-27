@@ -245,13 +245,14 @@
 ;;;FIXME: YOU'RE HERE
 ;;; Sentence based
 ;;;
+#_
 (defn- annotation->sentence-based-results [ann result-class]
-  #_
   (->> (.get ann CoreAnnotations$SentencesAnnotation)
        (mapv #(sentence-ann->sentence-based-result % result-class))))
 
 (defrecord AnalyseResult [token sentence])
-;;; FIXME: move to the top of this file??
+
+;;; FIXME: move to the top of this file?? ==> records.clj
 (defonce operation-level {:tokenize :token
                           :pos :token
                           :lemma :token
