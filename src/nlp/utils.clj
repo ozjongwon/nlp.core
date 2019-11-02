@@ -8,6 +8,8 @@
 ;;;
 ;;; Useful functions
 ;;;
+(def atom? (complement coll?))
+
 (defn find-in-coll [coll el]
   (find-first #(= % el) coll))
 

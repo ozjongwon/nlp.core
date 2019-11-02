@@ -18,8 +18,8 @@
     ]
    ))
 
-(defrecord AnnotationInfo [key dependency annotation-class result-converter
-                           ;; FIXME: operation-level - sentence, token, etc
+(defrecord AnnotationInfo [key operation-level dependency annotation-class result-converter
+                           ;; FIXME:  sentence, token, etc
                            ])
 
 (defonce special-token-map {"``" :double-quote-start
@@ -36,38 +36,53 @@
                             "," :comma
                             })
 
-(defn- remove-other-ner-value [ner-val]
+(defn- transform-ner-value [ner-val]
   (when-not (= ner-val "O")
-    ner-val))
+    (make-keyword ner-val)))
 
-(defn- transform-special-value [val] ;; for pos or lemma
+(defn- transform-lemma-value [val]
   (or (get special-token-map val) val))
 
-(defonce annotation-info-vector
+(defn- transform-pos-value [val]
+  (or (get special-token-map val) (make-keyword val)))
+
+(defonce annotation-info-map
   (let [infov (mapv #(apply ->AnnotationInfo %)
-                    [[:tokenize [] nil nil]
-                     [:docdate [] nil nil]
-                     [:cleanxml ["tokenize"] nil nil]
-                     [:ssplit ["tokenize"] nil nil]
-                     [:pos ["tokenize" "ssplit"]
-                      CoreAnnotations$PartOfSpeechAnnotation transform-special-value]
-                     [:parse ["tokenize" "ssplit"] nil nil]
-                     [:lemma ["tokenize" "ssplit" "pos"]
-                      CoreAnnotations$LemmaAnnotation transform-special-value]
-                     [:regexner ["tokenize" "ssplit" "pos"] nil nil]
-                     [:depparse ["tokenize" "ssplit" "pos"] nil nil]
-                     [:ner ["tokenize" "ssplit" "pos" "lemma"]
-                      CoreAnnotations$NamedEntityTagAnnotation remove-other-ner-value]
-                     [:entitylink ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
-                     [:sentiment ["tokenize" "ssplit" "pos" "parse"] nil nil]
-                     [:dcoref ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
-                     [:coref ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
-                     [:kbp ["tokenize" "ssplit" "pos" "lemma"] nil nil]
-                     [:quote ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"] nil nil]])]
+                    [[:tokenize :token [] nil nil]
+                     [:docdate nil [] nil nil]
+                     [:cleanxml nil ["tokenize"] nil nil]
+                     [:ssplit nil ["tokenize"] nil nil]
+                     [:pos :token ["tokenize" "ssplit"]
+                      CoreAnnotations$PartOfSpeechAnnotation transform-pos-value]
+                     [:parse nil ["tokenize" "ssplit"] nil nil]
+                     [:lemma :token ["tokenize" "ssplit" "pos"]
+                      CoreAnnotations$LemmaAnnotation transform-lemma-value]
+                     [:regexner nil ["tokenize" "ssplit" "pos"] nil nil]
+                     [:depparse nil ["tokenize" "ssplit" "pos"] nil nil]
+                     [:ner :token ["tokenize" "ssplit" "pos" "lemma"]
+                      CoreAnnotations$NamedEntityTagAnnotation transform-ner-value]
+                     [:entitylink nil ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
+                     [:sentiment :sentence ["tokenize" "ssplit" "pos" "parse"] nil nil]
+                     [:dcoref nil ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
+                     [:coref nil ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
+                     [:kbp nil ["tokenize" "ssplit" "pos" "lemma"] nil nil]
+                     [:quote nil ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"] nil nil]])]
     (zipmap (mapv :key infov) infov)))
 
+(defonce operation-level {:tokenize :token
+                          :pos :token
+                          :lemma :token
+                          :ner :token
+                          :sentiment :sentence
+                          ;; FIXME add more!
+                          })
+
+(defn annotators-keys->op-dispatch-set [annotators-keys]
+  (reduce-kv #(assoc %1 %2 (set %3)) {}
+             (group-by  #(get-in  annotation-info-map [% :operation-level]) annotators-keys)))
+
 (defn key->property-dependency [k]
-  (-> (get annotation-info-vector k)
+  (-> (get annotation-info-map k)
       (:dependency)))
 #_
 (defonce key->property-dependency
@@ -187,7 +202,7 @@
   (let [this (gensym)
         token-ann (gensym)
         [k & super-ks] (sort-msk-lsk kset)
-        {:keys [annotation-class result-converter]} (get annotation-info-vector k)
+        {:keys [annotation-class result-converter]} (get annotation-info-map k)
         %make-body (if (nil? super-ks)
                      `(assoc ~this ~k (prototype->exec-operation ~token-ann
                                                                  ~annotation-class
@@ -215,7 +230,7 @@
 
 (defmacro nlp-result-records [protocol ks]
   `(do
-     ~@(mapcat #(maybe-define-result-record protocol %) (powerset ks))))
+     ~@(mapcat #(maybe-define-result-record protocol %) (rest (powerset ks)))))
 
 ;;;
 ;;; Define result records
