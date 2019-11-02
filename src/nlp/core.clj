@@ -217,15 +217,18 @@
        (.get sentence-ann)
        (mapv #(make-operation-result result-class subkeys %))))
 
+(defrecord SentenceResult [tokens sentiment])
+
 (defn- execute-token-based-operations [key-set ann]
   (let [result-class (operation-keys->result-record key-set)
         prototype (get-result-prototype result-class)
         tokens-ann-class (prototype->annotation-class prototype)]
     (mapv (fn [sentence]
-            (mapv #(prototype->make-operation-result prototype %
-                                                     ;;make-operation-result result-class %
-                                                     )
-                  (.get sentence tokens-ann-class)))
+            (->SentenceResult (mapv #(prototype->make-operation-result prototype %
+                                                                       ;;make-operation-result result-class %
+                                                                       )
+                                    (.get sentence tokens-ann-class))
+                              :fixme))
           (.get ann CoreAnnotations$SentencesAnnotation))))
 
 ;; :lemma
@@ -249,8 +252,6 @@
   (->> (.get ann CoreAnnotations$SentencesAnnotation)
        (mapv #(sentence-ann->sentence-based-result % result-class))))
 
-(defrecord AnalyseResult [token sentence])
-
 ;;;
 ;;; Main function
 ;;;
@@ -259,7 +260,9 @@
         pipeline (apply make-pipeline annotators-keys)
         {:keys [token sentence]} (annotators-keys->op-dispatch-set annotators-keys)]
     (.annotate pipeline annotation) ;; side effect
-    (->AnalyseResult (execute-token-based-operations token annotation)
+    (execute-token-based-operations token annotation)
+    #_
+    (->AnalyseResult
                      1
                      #_
                      (execute-sentence-based-operations  annotation))))
