@@ -119,8 +119,10 @@
 ;;;
 
 (defprotocol OperationResult
+  (prototype->token-annotation-class [this])
   (prototype->make-token-based-operation-result [this token-ann])
-  (prototype->annotation-class [this]))
+  #_
+  (prototype->make-sentence-based-operation-result [this sentence-ann op-key]))
 
 (defonce result-prototypes (atom {}))
 
@@ -139,7 +141,7 @@
   OperationResult
   (prototype->make-token-based-operation-result [this token-ann]
     (merge this (token-ann->token-map token-ann)))
-  (prototype->annotation-class [this]
+  (prototype->token-annotation-class [this]
     CoreAnnotations$TokensAnnotation))
 
 ;;; Other records
@@ -190,7 +192,7 @@
     `(OperationResult
       (prototype->make-token-based-operation-result [~this ~token-ann]
          ~%make-body)
-      (prototype->annotation-class [_#]
+      (prototype->token-annotation-class [_#]
          CoreAnnotations$TokensAnnotation))))
 
 (defn maybe-define-result-record [protocol kset]
@@ -231,7 +233,7 @@
 ;;   OperationResult
 ;;   (prototype->make-token-based-operation-result [this subkeys mention-ann]
 ;;     (make-ner-result mention-ann))
-;;   (prototype->annotation-class [this]
+;;   (prototype->token-annotation-class [this]
 ;;     CoreAnnotations$TokensAnnotation))
 
 
@@ -244,5 +246,5 @@
       (if (or (nil? lemma) (= (:token token-result) lemma))
         token-result
         (merge this (assoc token-result :lemma lemma)))))
-  (prototype->annotation-class [this]
+  (prototype->token-annotation-class [this]
     CoreAnnotations$TokensAnnotation))
