@@ -124,7 +124,7 @@
 
 (defonce result-prototypes (atom {}))
 
-(defmacro result-class->result-prototype [result-type]
+(defmacro result-class->prototype [result-type]
   `(or (get @result-prototypes ~result-type)
        ;; Uh... eval!
        (let [prototype# (eval `(. ~~result-type create {}))]
@@ -132,7 +132,7 @@
          prototype#)))
 
 (defn make-token-based-operation-result [proto-class token-ann]
-  (prototype->make-token-based-operation-result (result-class->result-prototype proto-class) token-ann))
+  (prototype->make-token-based-operation-result (result-class->prototype proto-class) token-ann))
 
 ;;; Tokenize records
 (defrecord TokenizeResult [token begin end]

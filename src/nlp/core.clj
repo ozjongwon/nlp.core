@@ -89,7 +89,7 @@
    [clojure.string :refer [join]]
    [clojure.set :refer [intersection]]
    [nlp.utils :refer [find-in-coll make-keyword atom?]]
-   [nlp.records :refer [make-token-based-operation-result TokenBasedResult result-class->result-prototype
+   [nlp.records :refer [make-token-based-operation-result result-class->prototype
                         token-ann->token-map prototype->annotation-class
                         operation-keys->result-record prototype->make-token-based-operation-result
                         key->property-dependency annotators-keys->op-dispatch-set]]
@@ -224,18 +224,19 @@
 (defrecord SentenceResult [tokens sentences])
 
 (defn execute-sentence-based-operations [sentence-ann sentence-set]
-  (let [;;sentence-based-result-class (operation-keys->result-record (mapv :key sentence-set))
-        ;;sentence-prototype (result-class->result-prototype sentence-based-result-class)
-        ]
-    {:sentiment
-     ;;Very negative = 0
-     ;;Negative = 1
-     ;;Neutral = 2
-     ;;Positive = 3
-     ;;Very positive = 4
-     (let [sentiment-score (.get sentence-ann SentimentCoreAnnotations$SentimentAnnotatedTree)]
-       (. RNNCoreAnnotations getPredictedClass sentiment-score))}
-    )
+  (when-not (empty? sentence-set)
+   (let [sentence-based-result-class (operation-keys->result-record (mapv :key sentence-set))
+         sentence-prototype (and sentence-based-result-class
+                                 (result-class->prototype sentence-based-result-class))]
+     {:sentiment
+      ;;Very negative = 0
+      ;;Negative = 1
+      ;;Neutral = 2
+      ;;Positive = 3
+      ;;Very positive = 4
+      (let [sentiment-score (.get sentence-ann SentimentCoreAnnotations$SentimentAnnotatedTree)]
+        (. RNNCoreAnnotations getPredictedClass sentiment-score))}
+     ))
   ;; FIXME:
   ;; sentence-prototype is
   ;;    SentimentResult
@@ -247,7 +248,7 @@
 
 (defn- execute-annotation-operations [ann {:keys [token sentence]}]
   (let [token-based-result-class (operation-keys->result-record (mapv :key token))
-        token-prototype (result-class->result-prototype token-based-result-class)
+        token-prototype (result-class->prototype token-based-result-class)
         tokens-ann-class (prototype->annotation-class token-prototype)]
     (mapv (fn [sentence-ann]
             (->SentenceResult (mapv #(prototype->make-token-based-operation-result token-prototype %)
