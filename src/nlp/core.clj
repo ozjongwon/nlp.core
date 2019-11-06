@@ -234,17 +234,23 @@
   ;;     Very positive = 4
   (. RNNCoreAnnotations getPredictedClass (.get sentence-ann SentimentCoreAnnotations$SentimentAnnotatedTree)))
 
+#_
 (defn execute-sentence-based-operations [sentence-ann sentence-operation-set]
   ;; assume there is no operations dependency
   (let [prototype (-> (mapv :key sentence-operation-set)
                       (operation-keys->result-record)
-                      (result-class->prototype))
-        #_ {}]
+                      (result-class->prototype))]
     (reduce (fn [result op-key]
               (assoc result op-key (execute-sentence-based-operation op-key sentence-ann)))
             prototype
-            #_ (mapv :key sentence-operation-set)
             (keys prototype))))
+
+(defn execute-sentence-based-operations [sentence-ann sentence-operation-set]
+  ;; assume there is no operations dependency
+  (reduce (fn [result op-key]
+            (assoc result op-key (execute-sentence-based-operation op-key sentence-ann)))
+          {}
+          (mapv :key sentence-operation-set)))
 
 (defn- execute-annotation-operations [ann {:keys [token sentence]}]
   (let [token-based-result-class (operation-keys->result-record (mapv :key token))

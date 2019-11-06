@@ -18,7 +18,7 @@
     ]
    ))
 
-(defrecord AnnotationInfo [key operation-level dependency annotation-class result-converter
+(defrecord AnnotationInfo [key operation-level dependency operation-class result-converter
                            ;; FIXME:  sentence, token, etc
                            ])
 
@@ -161,8 +161,8 @@
 (defmulti make-protocol-for (fn [protocol & _] protocol))
 
 
-(defn prototype->exec-operation [val-annotation annotation-class converter]
-  (let [result (.get val-annotation annotation-class)]
+(defn prototype->exec-operation [val-annotation operation-class converter]
+  (let [result (.get val-annotation operation-class)]
     (if converter
       (converter result)
       result)))
@@ -171,15 +171,15 @@
   (let [this (gensym)
         token-ann (gensym)
         [k & super-ks] (sort-msk-lsk kset)
-        {:keys [annotation-class result-converter]} (get annotation-info-map k)
+        {:keys [operation-class result-converter]} (get annotation-info-map k)
         %make-body (if (nil? super-ks)
                      `(assoc ~this ~k (prototype->exec-operation ~token-ann
-                                                                 ~annotation-class
+                                                                 ~operation-class
                                                                  ~result-converter))
                      (let  [super-name (operation-keys->result-record-symbol super-ks)]
                        `(assoc (merge ~this (make-token-based-operation-result ~super-name ~token-ann))
                                ~k (prototype->exec-operation ~token-ann
-                                                             ~annotation-class
+                                                             ~operation-class
                                                              ~result-converter))))]
     `(OperationResult
       (prototype->make-token-based-operation-result [~this ~token-ann]
