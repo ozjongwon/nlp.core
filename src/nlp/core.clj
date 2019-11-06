@@ -89,9 +89,9 @@
    [clojure.string :refer [join]]
    [clojure.set :refer [intersection]]
    [nlp.utils :refer [find-in-coll make-keyword atom?]]
-   [nlp.records :refer [make-operation-result TokenBasedResult get-result-prototype
+   [nlp.records :refer [make-token-based-operation-result TokenBasedResult get-token-based-result-prototype
                         token-ann->token-map prototype->annotation-class
-                        operation-keys->result-record prototype->make-operation-result
+                        operation-keys->token-based-result-record prototype->make-token-based-operation-result
                         key->property-dependency annotators-keys->op-dispatch-set]]
    [medley.core :refer [find-first
                         ;;assoc-some
@@ -219,18 +219,16 @@
 (defn- sentence-ann->token-based-result [result-class subkeys sentence-ann]
   (->>
        (.get sentence-ann)
-       (mapv #(make-operation-result result-class subkeys %))))
+       (mapv #(make-token-based-operation-result result-class subkeys %))))
 
 (defrecord SentenceResult [tokens sentiment])
 
 (defn- execute-annotation-operations [ann {:keys [token sentence]}]
-  (let [result-class (operation-keys->result-record (mapv :key token))
-        prototype (get-result-prototype result-class)
+  (let [token-based-result-class (operation-keys->token-based-result-record (mapv :key token))
+        prototype (get-token-based-result-prototype token-based-result-class)
         tokens-ann-class (prototype->annotation-class prototype)]
     (mapv (fn [sentence]
-            (->SentenceResult (mapv #(prototype->make-operation-result prototype %
-                                                                       ;;make-operation-result result-class %
-                                                                       )
+            (->SentenceResult (mapv #(prototype->make-token-based-operation-result prototype %)
                                     (.get sentence tokens-ann-class))
                               {:score
                                ;;Very negative = 0

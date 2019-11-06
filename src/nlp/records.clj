@@ -119,42 +119,42 @@
 ;;;
 
 (defprotocol TokenBasedResult
-  (prototype->make-operation-result [this token-ann])
+  (prototype->make-token-based-operation-result [this token-ann])
   (prototype->annotation-class [this]))
 
 (defonce result-prototypes (atom {}))
 
-(defmacro get-result-prototype [result-type]
+(defmacro get-token-based-result-prototype [result-type]
   `(or (get @result-prototypes ~result-type)
        ;; Uh... eval!
        (let [prototype# (eval `(. ~~result-type create {}))]
          (swap! result-prototypes assoc ~result-type prototype#)
          prototype#)))
 
-(defn make-operation-result [proto-class token-ann]
-  (prototype->make-operation-result (get-result-prototype proto-class) token-ann))
+(defn make-token-based-operation-result [proto-class token-ann]
+  (prototype->make-token-based-operation-result (get-token-based-result-prototype proto-class) token-ann))
 
 ;;; Tokenize records
 (defrecord TokenizeResult [token begin end]
   TokenBasedResult
-  (prototype->make-operation-result [this token-ann]
+  (prototype->make-token-based-operation-result [this token-ann]
     (merge this (token-ann->token-map token-ann)))
   (prototype->annotation-class [this]
     CoreAnnotations$TokensAnnotation))
 
 ;;; Other records
-(defn operation-keys->result-record-symbol [key-set]
+(defn operation-keys->token-based-result-record-symbol [key-set]
   (->> (conj (mapv name (sort-msk-lsk key-set)) "result")
        (join \-)
        (camel-snake-kebab.core/->PascalCaseSymbol)))
 
 (let [records-ns *ns*]
-  (defn operation-keys->result-record [key-set]
-    (->> (operation-keys->result-record-symbol key-set)
+  (defn operation-keys->token-based-result-record [key-set]
+    (->> (operation-keys->token-based-result-record-symbol key-set)
          (ns-resolve records-ns))))
 
 (defn record-key->record-slots [k]
-  (if-let [record (operation-keys->result-record [k])]
+  (if-let [record (operation-keys->token-based-result-record [k])]
     (find-record-field-set record)
     [(->kebab-case-symbol k)]))
 
@@ -182,23 +182,23 @@
                      `(assoc ~this ~k (prototype->exec-operation ~token-ann
                                                                  ~annotation-class
                                                                  ~result-converter))
-                     (let  [super-name (operation-keys->result-record-symbol super-ks)]
-                       `(assoc (merge ~this (make-operation-result ~super-name ~token-ann))
+                     (let  [super-name (operation-keys->token-based-result-record-symbol super-ks)]
+                       `(assoc (merge ~this (make-token-based-operation-result ~super-name ~token-ann))
                                ~k (prototype->exec-operation ~token-ann
                                                              ~annotation-class
                                                              ~result-converter))))]
     `(TokenBasedResult
-      (prototype->make-operation-result [~this ~token-ann]
+      (prototype->make-token-based-operation-result [~this ~token-ann]
          ~%make-body)
       (prototype->annotation-class [_#]
          CoreAnnotations$TokensAnnotation))))
 
 (defn maybe-define-result-record [protocol kset]
-  (if (or (empty? kset) (operation-keys->result-record kset))
+  (if (or (empty? kset) (operation-keys->token-based-result-record kset))
     ;; record exists
     nil
     ;; a new record
-    (let [record-symbol (operation-keys->result-record-symbol kset)
+    (let [record-symbol (operation-keys->token-based-result-record-symbol kset)
           record-slots (sort (set (mapcat #(record-key->record-slots %) kset)))]
       `((defrecord ~record-symbol [~@record-slots]
           ~@(make-protocol-for protocol kset record-slots))))))
@@ -220,7 +220,7 @@
 ;;     LemmaResult map->LemmaNerResult))
 
 ;; (defn- make-ner-result [mention-ann]
-;;   (let [token-result (make-operation-result LemmaResult mention-ann)
+;;   (let [token-result (make-token-based-operation-result LemmaResult mention-ann)
 ;;         ner (.get mention-ann CoreAnnotations$NamedEntityTagAnnotation)]
 ;;     (if (or (= ner "O")  (nil? ner))
 ;;       token-result
@@ -229,7 +229,7 @@
 
 ;; (defrecord NerResult [token begin end lemma]
 ;;   TokenBasedResult
-;;   (prototype->make-operation-result [this subkeys mention-ann]
+;;   (prototype->make-token-based-operation-result [this subkeys mention-ann]
 ;;     (make-ner-result mention-ann))
 ;;   (prototype->annotation-class [this]
 ;;     CoreAnnotations$TokensAnnotation))
@@ -238,8 +238,8 @@
 #_
 (defrecord SentimentResult [score]
   SentenceBasedResult
-  (prototype->make-operation-result [this subkeys token-ann]
-    (let [token-result (make-operation-result PosResult token-ann)
+  (prototype->make-token-based-operation-result [this subkeys token-ann]
+    (let [token-result (make-token-based-operation-result PosResult token-ann)
           lemma (.get token-ann CoreAnnotations$LemmaAnnotation)]
       (if (or (nil? lemma) (= (:token token-result) lemma))
         token-result
