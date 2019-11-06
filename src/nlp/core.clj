@@ -121,6 +121,10 @@
     CoreAnnotations$PartOfSpeechAnnotation CoreAnnotations$LemmaAnnotation
     CoreAnnotations$MentionsAnnotation CoreAnnotations$NamedEntityTagAnnotation
     CoreLabel TaggedWord Word SentenceUtils]
+
+   [edu.stanford.nlp.sentiment SentimentCoreAnnotations$SentimentAnnotatedTree]
+   [edu.stanford.nlp.neural.rnn RNNCoreAnnotations]
+
    [edu.stanford.nlp.coref CorefCoreAnnotations$CorefChainAnnotation]
    ;; [edu.stanford.nlp.dcoref CorefCoreAnnotations$CorefChainAnnotation]
    [edu.stanford.nlp.pipeline Annotation StanfordCoreNLP CoreDocument]
@@ -228,7 +232,14 @@
                                                                        ;;make-operation-result result-class %
                                                                        )
                                     (.get sentence tokens-ann-class))
-                              :fixme))
+                              {:score
+                               ;;Very negative = 0
+                               ;;Negative = 1
+                               ;;Neutral = 2
+                               ;;Positive = 3
+                               ;;Very positive = 4
+                               (let [sentiment-score (.get sentence SentimentCoreAnnotations$SentimentAnnotatedTree)]
+                                 (. RNNCoreAnnotations getPredictedClass sentiment-score))}))
           (.get ann CoreAnnotations$SentencesAnnotation))))
 
 ;; :lemma
