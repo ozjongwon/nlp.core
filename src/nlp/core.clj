@@ -89,9 +89,9 @@
    [clojure.string :refer [join]]
    [clojure.set :refer [intersection]]
    [nlp.utils :refer [find-in-coll make-keyword atom?]]
-   [nlp.records :refer [make-token-based-operation-result TokenBasedResult get-token-based-result-prototype
+   [nlp.records :refer [make-token-based-operation-result TokenBasedResult result-class->result-prototype
                         token-ann->token-map prototype->annotation-class
-                        operation-keys->token-based-result-record prototype->make-token-based-operation-result
+                        operation-keys->result-record prototype->make-token-based-operation-result
                         key->property-dependency annotators-keys->op-dispatch-set]]
    [medley.core :refer [find-first
                         ;;assoc-some
@@ -221,23 +221,38 @@
        (.get sentence-ann)
        (mapv #(make-token-based-operation-result result-class subkeys %))))
 
-(defrecord SentenceResult [tokens sentiment])
+(defrecord SentenceResult [tokens sentences])
+
+(defn execute-sentence-based-operations [sentence-ann sentence-set]
+  (let [;;sentence-based-result-class (operation-keys->result-record (mapv :key sentence-set))
+        ;;sentence-prototype (result-class->result-prototype sentence-based-result-class)
+        ]
+    {:sentiment
+     ;;Very negative = 0
+     ;;Negative = 1
+     ;;Neutral = 2
+     ;;Positive = 3
+     ;;Very positive = 4
+     (let [sentiment-score (.get sentence-ann SentimentCoreAnnotations$SentimentAnnotatedTree)]
+       (. RNNCoreAnnotations getPredictedClass sentiment-score))}
+    )
+  ;; FIXME:
+  ;; sentence-prototype is
+  ;;    SentimentResult
+  ;;    AnotherSentimentResult
+  ;;   ...
+  ;;   (mapv #(prototype->make-sentence-based-operation-result sentence-prototype %)
+  ;;          sentence
+  )
 
 (defn- execute-annotation-operations [ann {:keys [token sentence]}]
-  (let [token-based-result-class (operation-keys->token-based-result-record (mapv :key token))
-        prototype (get-token-based-result-prototype token-based-result-class)
-        tokens-ann-class (prototype->annotation-class prototype)]
-    (mapv (fn [sentence]
-            (->SentenceResult (mapv #(prototype->make-token-based-operation-result prototype %)
-                                    (.get sentence tokens-ann-class))
-                              {:score
-                               ;;Very negative = 0
-                               ;;Negative = 1
-                               ;;Neutral = 2
-                               ;;Positive = 3
-                               ;;Very positive = 4
-                               (let [sentiment-score (.get sentence SentimentCoreAnnotations$SentimentAnnotatedTree)]
-                                 (. RNNCoreAnnotations getPredictedClass sentiment-score))}))
+  (let [token-based-result-class (operation-keys->result-record (mapv :key token))
+        token-prototype (result-class->result-prototype token-based-result-class)
+        tokens-ann-class (prototype->annotation-class token-prototype)]
+    (mapv (fn [sentence-ann]
+            (->SentenceResult (mapv #(prototype->make-token-based-operation-result token-prototype %)
+                                    (.get sentence-ann tokens-ann-class))
+                              (execute-sentence-based-operations sentence-ann sentence)))
           (.get ann CoreAnnotations$SentencesAnnotation))))
 
 ;; :lemma

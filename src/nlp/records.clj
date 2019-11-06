@@ -124,7 +124,7 @@
 
 (defonce result-prototypes (atom {}))
 
-(defmacro get-token-based-result-prototype [result-type]
+(defmacro result-class->result-prototype [result-type]
   `(or (get @result-prototypes ~result-type)
        ;; Uh... eval!
        (let [prototype# (eval `(. ~~result-type create {}))]
@@ -132,7 +132,7 @@
          prototype#)))
 
 (defn make-token-based-operation-result [proto-class token-ann]
-  (prototype->make-token-based-operation-result (get-token-based-result-prototype proto-class) token-ann))
+  (prototype->make-token-based-operation-result (result-class->result-prototype proto-class) token-ann))
 
 ;;; Tokenize records
 (defrecord TokenizeResult [token begin end]
@@ -143,18 +143,18 @@
     CoreAnnotations$TokensAnnotation))
 
 ;;; Other records
-(defn operation-keys->token-based-result-record-symbol [key-set]
+(defn operation-keys->result-record-symbol [key-set]
   (->> (conj (mapv name (sort-msk-lsk key-set)) "result")
        (join \-)
        (camel-snake-kebab.core/->PascalCaseSymbol)))
 
 (let [records-ns *ns*]
-  (defn operation-keys->token-based-result-record [key-set]
-    (->> (operation-keys->token-based-result-record-symbol key-set)
+  (defn operation-keys->result-record [key-set]
+    (->> (operation-keys->result-record-symbol key-set)
          (ns-resolve records-ns))))
 
 (defn record-key->record-slots [k]
-  (if-let [record (operation-keys->token-based-result-record [k])]
+  (if-let [record (operation-keys->result-record [k])]
     (find-record-field-set record)
     [(->kebab-case-symbol k)]))
 
@@ -182,7 +182,7 @@
                      `(assoc ~this ~k (prototype->exec-operation ~token-ann
                                                                  ~annotation-class
                                                                  ~result-converter))
-                     (let  [super-name (operation-keys->token-based-result-record-symbol super-ks)]
+                     (let  [super-name (operation-keys->result-record-symbol super-ks)]
                        `(assoc (merge ~this (make-token-based-operation-result ~super-name ~token-ann))
                                ~k (prototype->exec-operation ~token-ann
                                                              ~annotation-class
@@ -194,11 +194,11 @@
          CoreAnnotations$TokensAnnotation))))
 
 (defn maybe-define-result-record [protocol kset]
-  (if (or (empty? kset) (operation-keys->token-based-result-record kset))
+  (if (or (empty? kset) (operation-keys->result-record kset))
     ;; record exists
     nil
     ;; a new record
-    (let [record-symbol (operation-keys->token-based-result-record-symbol kset)
+    (let [record-symbol (operation-keys->result-record-symbol kset)
           record-slots (sort (set (mapcat #(record-key->record-slots %) kset)))]
       `((defrecord ~record-symbol [~@record-slots]
           ~@(make-protocol-for protocol kset record-slots))))))
