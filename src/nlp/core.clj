@@ -219,8 +219,8 @@
 
 (defrecord SentenceResult [tokens sentiment])
 
-(defn- execute-token-based-operations [key-set ann]
-  (let [result-class (operation-keys->result-record key-set)
+(defn- execute-annotation-operations [ann {:keys [token sentence]}]
+  (let [result-class (operation-keys->result-record (mapv :key token))
         prototype (get-result-prototype result-class)
         tokens-ann-class (prototype->annotation-class prototype)]
     (mapv (fn [sentence]
@@ -257,10 +257,9 @@
 ;;;
 (defn analyse-text [text & annotators-keys]
   (let [annotation (Annotation. text)
-        pipeline (apply make-pipeline annotators-keys)
-        {:keys [token sentence]} (annotators-keys->op-dispatch-set annotators-keys)]
+        pipeline (apply make-pipeline annotators-keys)]
     (.annotate pipeline annotation) ;; side effect
-    (execute-token-based-operations token annotation)
+    (execute-annotation-operations annotation (annotators-keys->op-dispatch-set annotators-keys))
     #_
     (->AnalyseResult
                      1

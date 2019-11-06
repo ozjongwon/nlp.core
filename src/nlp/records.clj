@@ -69,39 +69,14 @@
                      [:quote nil ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"] nil nil]])]
     (zipmap (mapv :key infov) infov)))
 
-(defonce operation-level {:tokenize :token
-                          :pos :token
-                          :lemma :token
-                          :ner :token
-                          :sentiment :sentence
-                          ;; FIXME add more!
-                          })
-
 (defn annotators-keys->op-dispatch-set [annotators-keys]
   (reduce-kv #(assoc %1 %2 (set %3)) {}
-             (group-by  #(get-in  annotation-info-map [% :operation-level]) annotators-keys)))
+             (group-by #(:operation-level %)
+                       (vals (select-keys annotation-info-map annotators-keys)))))
 
 (defn key->property-dependency [k]
   (-> (get annotation-info-map k)
       (:dependency)))
-#_
-(defonce key->property-dependency
-  {:tokenize []
-   :docdate []
-   :cleanxml ["tokenize"]
-   :ssplit ["tokenize"]                 ; sentence detection
-   :pos ["tokenize" "ssplit"]
-   :parse ["tokenize" "ssplit"]
-   :lemma ["tokenize" "ssplit" "pos"]
-   :regexner ["tokenize" "ssplit" "pos"]
-   :depparse ["tokenize" "ssplit" "pos"]
-   :ner ["tokenize" "ssplit" "pos" "lemma"] ; Named Entity Recognition
-   :entitylink ["tokenize" "ssplit" "pos" "lemma"  "ner"]
-   :sentiment ["tokenize" "ssplit" "pos" "parse"]
-   :dcoref ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"]
-   :coref ["tokenize" "ssplit" "pos" "lemma"  "ner"]
-   :kbp ["tokenize" "ssplit" "pos" "lemma"]
-   :quote ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"]})
 
 (defn sort-msk-lsk [ks] ;; most specific key -> least specific key
   (sort #(> (count (key->property-dependency %1))
