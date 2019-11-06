@@ -118,7 +118,7 @@
 ;;; quote - TBD
 ;;;
 
-(defprotocol TokenBasedResult
+(defprotocol OperationResult
   (prototype->make-token-based-operation-result [this token-ann])
   (prototype->annotation-class [this]))
 
@@ -136,7 +136,7 @@
 
 ;;; Tokenize records
 (defrecord TokenizeResult [token begin end]
-  TokenBasedResult
+  OperationResult
   (prototype->make-token-based-operation-result [this token-ann]
     (merge this (token-ann->token-map token-ann)))
   (prototype->annotation-class [this]
@@ -173,7 +173,7 @@
       (converter result)
       result)))
 
-(defmethod make-protocol-for 'TokenBasedResult [protocol kset slots]
+(defmethod make-protocol-for 'OperationResult [protocol kset slots]
   (let [this (gensym)
         token-ann (gensym)
         [k & super-ks] (sort-msk-lsk kset)
@@ -187,7 +187,7 @@
                                ~k (prototype->exec-operation ~token-ann
                                                              ~annotation-class
                                                              ~result-converter))))]
-    `(TokenBasedResult
+    `(OperationResult
       (prototype->make-token-based-operation-result [~this ~token-ann]
          ~%make-body)
       (prototype->annotation-class [_#]
@@ -210,9 +210,9 @@
 ;;;
 ;;; Define result records
 ;;;
-(nlp-result-records TokenBasedResult [:ner :lemma :pos :tokenize])
+(nlp-result-records OperationResult [:ner :lemma :pos :tokenize])
 
-;; (macroexpand '(nlp-result-records TokenBasedResult [:ner :lemma :pos :tokenize]))
+;; (macroexpand '(nlp-result-records OperationResult [:ner :lemma :pos :tokenize]))
 
 ;; (defn- get-ner-map-constructor [token-result]
 ;;   (condp = (class token-result)
@@ -228,7 +228,7 @@
 ;;           ((get-ner-map-constructor token-result))))))
 
 ;; (defrecord NerResult [token begin end lemma]
-;;   TokenBasedResult
+;;   OperationResult
 ;;   (prototype->make-token-based-operation-result [this subkeys mention-ann]
 ;;     (make-ner-result mention-ann))
 ;;   (prototype->annotation-class [this]
