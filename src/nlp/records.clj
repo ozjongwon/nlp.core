@@ -120,9 +120,7 @@
 
 (defprotocol OperationResult
   (prototype->token-annotation-class [this])
-  (prototype->make-token-based-operation-result [this token-ann])
-  #_
-  (prototype->make-sentence-based-operation-result [this sentence-ann op-key]))
+  (prototype->make-token-based-operation-result [this token-ann]))
 
 (defonce result-prototypes (atom {}))
 
@@ -159,12 +157,6 @@
   (if-let [record (operation-keys->result-record [k])]
     (find-record-field-set record)
     [(->kebab-case-symbol k)]))
-
-#_
-(defonce key->core-annotation-class
-  {:pos   CoreAnnotations$PartOfSpeechAnnotation
-   :lemma CoreAnnotations$LemmaAnnotation
-   :ner   CoreAnnotations$NamedEntityTagAnnotation})
 
 (defmulti make-protocol-for (fn [protocol & _] protocol))
 

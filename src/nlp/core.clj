@@ -236,38 +236,15 @@
 
 (defn execute-sentence-based-operations [sentence-ann sentence-operation-set]
   ;; assume there is no operations dependency
-  (let [prototype #_ (-> (mapv :key sentence-operation-set)
+  (let [prototype (-> (mapv :key sentence-operation-set)
                       (operation-keys->result-record)
                       (result-class->prototype))
-        {}]
+        #_ {}]
     (reduce (fn [result op-key]
               (assoc result op-key (execute-sentence-based-operation op-key sentence-ann)))
             prototype
-            (mapv :key sentence-operation-set)
-            #_
-            (keys prototype)))
-  #_
-  (when-not (empty? sentence-set)
-   (let [sentence-based-result-class (operation-keys->result-record (mapv :key sentence-set))
-         sentence-prototype (and sentence-based-result-class
-                                 (result-class->prototype sentence-based-result-class))]
-     {:sentiment
-      ;;Very negative = 0
-      ;;Negative = 1
-      ;;Neutral = 2
-      ;;Positive = 3
-      ;;Very positive = 4
-      (let [sentiment-score (.get sentence-ann SentimentCoreAnnotations$SentimentAnnotatedTree)]
-        (. RNNCoreAnnotations getPredictedClass sentiment-score))}
-     ))
-  ;; FIXME:
-  ;; sentence-prototype is
-  ;;    SentimentResult
-  ;;    AnotherSentimentResult
-  ;;   ...
-  ;;   (mapv #(prototype->make-sentence-based-operation-result sentence-prototype %)
-  ;;          sentence
-  )
+            #_ (mapv :key sentence-operation-set)
+            (keys prototype))))
 
 (defn- execute-annotation-operations [ann {:keys [token sentence]}]
   (let [token-based-result-class (operation-keys->result-record (mapv :key token))
