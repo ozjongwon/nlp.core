@@ -221,7 +221,7 @@
        (.get sentence-ann)
        (mapv #(make-token-based-operation-result result-class subkeys %))))
 
-(defrecord SentenceResult [tokens sentences])
+(defrecord SentenceResult [tokens sentence])
 
 (defmulti execute-sentence-based-operation (fn [op-key & _] op-key))
 
@@ -234,20 +234,25 @@
   ;;     Very positive = 4
   (. RNNCoreAnnotations getPredictedClass (.get sentence-ann SentimentCoreAnnotations$SentimentAnnotatedTree)))
 
-(defn execute-sentence-based-operations [sentence-ann sentence-operation-set]
+(defn- annotation-infos->prototype [annotation-infos]
+  (-> (operation-keys->result-record (mapv :key annotation-infos))
+      (result-class->prototype)))
+
+(defn execute-sentence-based-operations [sentence-ann sentence-prototype]
   ;; assume there is no operations dependency
   (reduce (fn [result op-key]
             (assoc result op-key (execute-sentence-based-operation op-key sentence-ann)))
-          {}
-          (mapv :key sentence-operation-set)))
+          sentence-prototype
+          (keys sentence-prototype)))
 
 (defn- execute-annotation-operations [ann {:keys [token sentence]}]
-  (let [token-based-result-class (operation-keys->result-record (mapv :key token))
-        token-prototype (result-class->prototype token-based-result-class)]
+  (let [token-prototype (annotation-infos->prototype token)
+        sentence-prototype (and sentence (annotation-infos->prototype sentence))]
     (mapv (fn [sentence-ann]
             (->SentenceResult (mapv #(prototype->make-token-based-operation-result token-prototype %)
                                     (.get sentence-ann CoreAnnotations$TokensAnnotation))
-                              (execute-sentence-based-operations sentence-ann sentence)))
+                              (when sentence-prototype
+                                (execute-sentence-based-operations sentence-ann sentence-prototype))))
           (.get ann CoreAnnotations$SentencesAnnotation))))
 
 ;; :lemma
