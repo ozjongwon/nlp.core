@@ -226,33 +226,31 @@
 (defmulti execute-sentence-based-operation (fn [op-key & _] op-key))
 
 (defmethod execute-sentence-based-operation :sentiment [_ sentence-ann]
-  ;; Sentiment score
-  ;;     Very negative = 0
-  ;;     Negative = 1
-  ;;     Neutral = 2
-  ;;     Positive = 3
-  ;;     Very positive = 4
   (. RNNCoreAnnotations getPredictedClass (.get sentence-ann SentimentCoreAnnotations$SentimentAnnotatedTree)))
 
 (defn- annotation-infos->prototype [annotation-infos]
   (-> (operation-keys->result-record (mapv :key annotation-infos))
       (result-class->prototype)))
 
-(defn execute-sentence-based-operations [sentence-ann sentence-prototype]
+(defn- execute-sentence-based-operations [sentence-ann sentence-prototype sentence-ann-infos]
   ;; assume there is no operations dependency
-  (reduce (fn [result op-key]
-            (assoc result op-key (execute-sentence-based-operation op-key sentence-ann)))
+  (reduce (fn [result op-info]
+            (let [op-key (:key op-info)]
+              (assoc result op-key ((:result-converter op-info)
+                                    (execute-sentence-based-operation op-key sentence-ann)))))
           sentence-prototype
+          sentence-ann-infos
+          #_
           (keys sentence-prototype)))
 
-(defn- execute-annotation-operations [ann {:keys [token sentence]}]
+(defn execute-annotation-operations [ann {:keys [token sentence]}]
   (let [token-prototype (annotation-infos->prototype token)
         sentence-prototype (and sentence (annotation-infos->prototype sentence))]
     (mapv (fn [sentence-ann]
             (->SentenceResult (mapv #(prototype->make-token-based-operation-result token-prototype %)
                                     (.get sentence-ann CoreAnnotations$TokensAnnotation))
                               (when sentence-prototype
-                                (execute-sentence-based-operations sentence-ann sentence-prototype))))
+                                (execute-sentence-based-operations sentence-ann sentence-prototype sentence))))
           (.get ann CoreAnnotations$SentencesAnnotation))))
 
 ;; :lemma

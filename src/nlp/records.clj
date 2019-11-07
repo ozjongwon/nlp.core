@@ -46,6 +46,10 @@
 (defn- transform-pos-value [val]
   (or (get special-token-map val) (make-keyword val)))
 
+(defonce sentiment-vals (vector :very-negative :negative :neutral :positive :very-positive))
+(defn- transform-sentiment-value [val]
+  (get sentiment-vals val))
+
 (defonce annotation-info-map
   (let [infov (mapv #(apply ->AnnotationInfo %)
                     [[:tokenize :token [] nil nil]
@@ -62,7 +66,8 @@
                      [:ner :token ["tokenize" "ssplit" "pos" "lemma"]
                       CoreAnnotations$NamedEntityTagAnnotation transform-ner-value]
                      [:entitylink nil ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
-                     [:sentiment :sentence ["tokenize" "ssplit" "pos" "parse"] nil nil]
+                     [:sentiment :sentence ["tokenize" "ssplit" "pos" "parse"] nil
+                      transform-sentiment-value]
                      [:dcoref nil ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
                      [:coref nil ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
                      [:kbp nil ["tokenize" "ssplit" "pos" "lemma"] nil nil]
