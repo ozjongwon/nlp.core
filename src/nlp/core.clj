@@ -90,7 +90,7 @@
    [clojure.set :refer [intersection]]
    [nlp.utils :refer [find-in-coll make-keyword atom?]]
    [nlp.records :refer [make-token-based-operation-result result-class->prototype
-                        token-ann->token-map prototype->token-annotation-class
+                        token-ann->token-map
                         operation-keys->result-record prototype->make-token-based-operation-result
                         key->property-dependency annotators-keys->op-dispatch-set]]
    [medley.core :refer [find-first
@@ -117,7 +117,7 @@
    ;;[edu.stanford.nlp.international.spanish.process SpanishTokenizer]
 
    [edu.stanford.nlp.ling CoreAnnotations$SentencesAnnotation CoreAnnotations$TextAnnotation
-    CoreAnnotations$NamedEntityTagAnnotation
+    CoreAnnotations$TokensAnnotation CoreAnnotations$NamedEntityTagAnnotation
     CoreAnnotations$PartOfSpeechAnnotation CoreAnnotations$LemmaAnnotation
     CoreAnnotations$MentionsAnnotation CoreAnnotations$NamedEntityTagAnnotation
     CoreLabel TaggedWord Word SentenceUtils]
@@ -234,17 +234,6 @@
   ;;     Very positive = 4
   (. RNNCoreAnnotations getPredictedClass (.get sentence-ann SentimentCoreAnnotations$SentimentAnnotatedTree)))
 
-#_
-(defn execute-sentence-based-operations [sentence-ann sentence-operation-set]
-  ;; assume there is no operations dependency
-  (let [prototype (-> (mapv :key sentence-operation-set)
-                      (operation-keys->result-record)
-                      (result-class->prototype))]
-    (reduce (fn [result op-key]
-              (assoc result op-key (execute-sentence-based-operation op-key sentence-ann)))
-            prototype
-            (keys prototype))))
-
 (defn execute-sentence-based-operations [sentence-ann sentence-operation-set]
   ;; assume there is no operations dependency
   (reduce (fn [result op-key]
@@ -254,11 +243,10 @@
 
 (defn- execute-annotation-operations [ann {:keys [token sentence]}]
   (let [token-based-result-class (operation-keys->result-record (mapv :key token))
-        token-prototype (result-class->prototype token-based-result-class)
-        tokens-ann-class (prototype->token-annotation-class token-prototype)]
+        token-prototype (result-class->prototype token-based-result-class)]
     (mapv (fn [sentence-ann]
             (->SentenceResult (mapv #(prototype->make-token-based-operation-result token-prototype %)
-                                    (.get sentence-ann tokens-ann-class))
+                                    (.get sentence-ann CoreAnnotations$TokensAnnotation))
                               (execute-sentence-based-operations sentence-ann sentence)))
           (.get ann CoreAnnotations$SentencesAnnotation))))
 
@@ -290,12 +278,7 @@
   (let [annotation (Annotation. text)
         pipeline (apply make-pipeline annotators-keys)]
     (.annotate pipeline annotation) ;; side effect
-    (execute-annotation-operations annotation (annotators-keys->op-dispatch-set annotators-keys))
-    #_
-    (->AnalyseResult
-                     1
-                     #_
-                     (execute-sentence-based-operations  annotation))))
+    (execute-annotation-operations annotation (annotators-keys->op-dispatch-set annotators-keys))))
 
 (defonce paragraph "Let's pause, and then reflect.")
 

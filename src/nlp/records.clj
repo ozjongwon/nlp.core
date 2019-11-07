@@ -5,7 +5,7 @@
    [camel-snake-kebab.core :refer [->PascalCaseSymbol ->kebab-case-symbol]]
    [nlp.utils :refer [make-keyword powerset find-record-field-set]])
   (:import
-   [edu.stanford.nlp.ling CoreAnnotations$LemmaAnnotation CoreAnnotations$TokensAnnotation
+   [edu.stanford.nlp.ling CoreAnnotations$LemmaAnnotation
     CoreAnnotations$PartOfSpeechAnnotation
     CoreAnnotations$MentionsAnnotation CoreAnnotations$TextAnnotation
     CoreAnnotations$TokenBeginAnnotation CoreAnnotations$TokenEndAnnotation
@@ -70,7 +70,8 @@
     (zipmap (mapv :key infov) infov)))
 
 (defn annotators-keys->op-dispatch-set [annotators-keys]
-  (reduce-kv #(assoc %1 %2 (set %3)) {}
+  (reduce-kv #(assoc %1 %2 (set %3))
+             {}
              (group-by #(:operation-level %)
                        (vals (select-keys annotation-info-map annotators-keys)))))
 
@@ -119,7 +120,6 @@
 ;;;
 
 (defprotocol OperationResult
-  (prototype->token-annotation-class [this])
   (prototype->make-token-based-operation-result [this token-ann]))
 
 (defonce result-prototypes (atom {}))
@@ -138,9 +138,7 @@
 (defrecord TokenizeResult [token begin end]
   OperationResult
   (prototype->make-token-based-operation-result [this token-ann]
-    (merge this (token-ann->token-map token-ann)))
-  (prototype->token-annotation-class [this]
-    CoreAnnotations$TokensAnnotation))
+    (merge this (token-ann->token-map token-ann))))
 
 ;;; Other records
 (defn operation-keys->result-record-symbol [key-set]
@@ -158,55 +156,74 @@
     (find-record-field-set record)
     [(->kebab-case-symbol k)]))
 
-(defmulti make-protocol-for (fn [protocol & _] protocol))
-
-
-(defn prototype->exec-operation [val-annotation operation-class converter]
+;; (prototype->exec-token-based-operation #object[edu.stanford.nlp.ling.CoreLabel 0x59d032f0 "Joe-1"]
+;;                            CoreAnnotations$PartOfSpeechAnnotation
+;;                            #function[nlp.records/transform-pos-value])
+(defn prototype->exec-token-based-operation [val-annotation operation-class converter]
   (let [result (.get val-annotation operation-class)]
     (if converter
       (converter result)
       result)))
 
-(defmethod make-protocol-for 'OperationResult [protocol kset slots]
+(defn make-protocol-for-token-based [kset slots]
   (let [this (gensym)
         token-ann (gensym)
         [k & super-ks] (sort-msk-lsk kset)
-        {:keys [operation-class result-converter]} (get annotation-info-map k)
-        %make-body (if (nil? super-ks)
-                     `(assoc ~this ~k (prototype->exec-operation ~token-ann
-                                                                 ~operation-class
-                                                                 ~result-converter))
-                     (let  [super-name (operation-keys->result-record-symbol super-ks)]
-                       `(assoc (merge ~this (make-token-based-operation-result ~super-name ~token-ann))
-                               ~k (prototype->exec-operation ~token-ann
-                                                             ~operation-class
-                                                             ~result-converter))))]
-    `(OperationResult
-      (prototype->make-token-based-operation-result [~this ~token-ann]
-         ~%make-body)
-      (prototype->token-annotation-class [_#]
-         CoreAnnotations$TokensAnnotation))))
+        {:keys [operation-level operation-class result-converter]} (get annotation-info-map k)
+        token-op-body (if (nil? super-ks)
+                        `(assoc ~this ~k (prototype->exec-token-based-operation ~token-ann
+                                                                                ~operation-class
+                                                                                ~result-converter))
+                        (let  [super-name (operation-keys->result-record-symbol super-ks)]
+                          `(assoc (merge ~this (make-token-based-operation-result ~super-name ~token-ann))
+                                  ~k (prototype->exec-token-based-operation ~token-ann
+                                                                            ~operation-class
+                                                                            ~result-converter))))]
+    (when token-op-body
+      `(OperationResult
+        ~@(when token-op-body
+            `((prototype->make-token-based-operation-result [~this ~token-ann]
+                                                            ~token-op-body)))))))
 
-(defn maybe-define-result-record [protocol kset]
-  (if (or (empty? kset) (operation-keys->result-record kset))
-    ;; record exists
-    nil
-    ;; a new record
-    (let [record-symbol (operation-keys->result-record-symbol kset)
-          record-slots (sort (set (mapcat #(record-key->record-slots %) kset)))]
-      `((defrecord ~record-symbol [~@record-slots]
-          ~@(make-protocol-for protocol kset record-slots))))))
+(defn- info-set->base-records-parts [info-set]
+  (when-let [kset-list (rest (powerset (mapv :key info-set)))]
+    (mapcat (fn [kset]
+            (if (operation-keys->result-record kset)
+              ;; record exists
+              nil
+              ;; a new record
+              [[(operation-keys->result-record-symbol kset)
+                (sort (set (mapcat #(record-key->record-slots %) kset)))
+                kset]]))
+          kset-list)))
 
-(defmacro nlp-result-records [protocol ks]
-  `(do
-     ~@(mapcat #(maybe-define-result-record protocol %) (rest (powerset ks)))))
+(defn define-sentence-based-records [sentence-info-set]
+  (mapv (fn [[record-symbol record-slots]]
+          (when (and record-symbol record-slots)
+            `(defrecord ~record-symbol [~@record-slots])))
+        (info-set->base-records-parts sentence-info-set)))
+
+(defn define-token-based-records [token-info-set]
+  (mapv (fn [[record-symbol record-slots kset]]
+          (when-let [protocol-body (make-protocol-for-token-based kset record-slots)]
+            `(defrecord ~record-symbol [~@record-slots]
+               ~@protocol-body)))
+        (info-set->base-records-parts token-info-set)))
+
+(defmacro nlp-result-records [ks]
+  ;; 1. define sentence based records
+  ;; 2. define token based records
+  (let [{:keys [token sentence]} (annotators-keys->op-dispatch-set ks)]
+   `(do
+      ~@(define-sentence-based-records sentence)
+      ~@(define-token-based-records token))))
 
 ;;;
 ;;; Define result records
 ;;;
-(nlp-result-records OperationResult [:ner :lemma :pos :tokenize])
+(nlp-result-records [:ner :lemma :pos :tokenize :sentiment])
 
-;; (macroexpand '(nlp-result-records OperationResult [:ner :lemma :pos :tokenize]))
+;; (macroexpand '(nlp-result-records [:ner :lemma :pos :tokenize :sentiment]))
 
 ;; (defn- get-ner-map-constructor [token-result]
 ;;   (condp = (class token-result)
@@ -224,9 +241,7 @@
 ;; (defrecord NerResult [token begin end lemma]
 ;;   OperationResult
 ;;   (prototype->make-token-based-operation-result [this subkeys mention-ann]
-;;     (make-ner-result mention-ann))
-;;   (prototype->token-annotation-class [this]
-;;     CoreAnnotations$TokensAnnotation))
+;;     (make-ner-result mention-ann)))
 
 
 #_
@@ -237,6 +252,4 @@
           lemma (.get token-ann CoreAnnotations$LemmaAnnotation)]
       (if (or (nil? lemma) (= (:token token-result) lemma))
         token-result
-        (merge this (assoc token-result :lemma lemma)))))
-  (prototype->token-annotation-class [this]
-    CoreAnnotations$TokensAnnotation))
+        (merge this (assoc token-result :lemma lemma))))))
