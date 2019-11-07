@@ -242,11 +242,12 @@
           sentence-ann-infos))
 
 (defn execute-annotation-operations [ann {:keys [token sentence]}]
-  (let [token-prototype (annotation-infos->prototype token)
+  (let [token-prototype (and token (annotation-infos->prototype token))
         sentence-prototype (and sentence (annotation-infos->prototype sentence))]
     (mapv (fn [sentence-ann]
-            (->SentenceResult (mapv #(prototype->make-token-based-operation-result token-prototype %)
-                                    (.get sentence-ann CoreAnnotations$TokensAnnotation))
+            (->SentenceResult (when token-prototype
+                                (mapv #(prototype->make-token-based-operation-result token-prototype %)
+                                      (.get sentence-ann CoreAnnotations$TokensAnnotation)))
                               (when sentence-prototype
                                 (execute-sentence-based-operations sentence-ann sentence-prototype sentence))))
           (.get ann CoreAnnotations$SentencesAnnotation))))
@@ -262,6 +263,15 @@
 
 ;; :ner
 (def ner-paragraph "Joe was the last person to see Fred. He saw him in Boston at McKenzie's pub at 3:00 where he paid $2.45 for an ale. Joe wanted to go to Vermont for the day to visit a cousin who works at IBM, but Sally and he had to look for Fred.")
+
+;;
+;; :sentiment
+;;
+(def review "An overly sentimental film with a somewhat problematic message, but its sweetness and charm are occasionally enough to approximate true depth and grace. ")
+
+(def sam "Sam was an odd sort of fellow. Not prone to angry and not prone to merriment. Overall, an odd fellow.")
+
+(def mary  "Mary thought that custard pie was the best pie in the world. However, she loathed chocolate pie.")
 
 ;;;
 ;;; Main function
