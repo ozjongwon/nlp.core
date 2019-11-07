@@ -239,9 +239,7 @@
               (assoc result op-key ((:result-converter op-info)
                                     (execute-sentence-based-operation op-key sentence-ann)))))
           sentence-prototype
-          sentence-ann-infos
-          #_
-          (keys sentence-prototype)))
+          sentence-ann-infos))
 
 (defn execute-annotation-operations [ann {:keys [token sentence]}]
   (let [token-prototype (annotation-infos->prototype token)
@@ -264,15 +262,6 @@
 
 ;; :ner
 (def ner-paragraph "Joe was the last person to see Fred. He saw him in Boston at McKenzie's pub at 3:00 where he paid $2.45 for an ale. Joe wanted to go to Vermont for the day to visit a cousin who works at IBM, but Sally and he had to look for Fred.")
-
-
-;;;FIXME: YOU'RE HERE
-;;; Sentence based
-;;;
-#_
-(defn- annotation->sentence-based-results [ann result-class]
-  (->> (.get ann CoreAnnotations$SentencesAnnotation)
-       (mapv #(sentence-ann->sentence-based-result % result-class))))
 
 ;;;
 ;;; Main function

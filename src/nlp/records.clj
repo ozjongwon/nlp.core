@@ -229,32 +229,3 @@
 (nlp-result-records [:ner :lemma :pos :tokenize :sentiment])
 
 ;; (macroexpand '(nlp-result-records [:ner :lemma :pos :tokenize :sentiment]))
-
-;; (defn- get-ner-map-constructor [token-result]
-;;   (condp = (class token-result)
-;;     PosResult  map->PosNerResult
-;;     LemmaResult map->LemmaNerResult))
-
-;; (defn- make-ner-result [mention-ann]
-;;   (let [token-result (make-token-based-operation-result LemmaResult mention-ann)
-;;         ner (.get mention-ann CoreAnnotations$NamedEntityTagAnnotation)]
-;;     (if (or (= ner "O")  (nil? ner))
-;;       token-result
-;;       (-> (assoc token-result :ner (make-keyword ner))
-;;           ((get-ner-map-constructor token-result))))))
-
-;; (defrecord NerResult [token begin end lemma]
-;;   OperationResult
-;;   (prototype->make-token-based-operation-result [this subkeys mention-ann]
-;;     (make-ner-result mention-ann)))
-
-
-#_
-(defrecord SentimentResult [score]
-  SentenceBasedResult
-  (prototype->make-token-based-operation-result [this subkeys token-ann]
-    (let [token-result (make-token-based-operation-result PosResult token-ann)
-          lemma (.get token-ann CoreAnnotations$LemmaAnnotation)]
-      (if (or (nil? lemma) (= (:token token-result) lemma))
-        token-result
-        (merge this (assoc token-result :lemma lemma))))))
