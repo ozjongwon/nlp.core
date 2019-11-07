@@ -206,24 +206,25 @@
                    (vfn v)
                    (convert-tree v kfn vfn))
                  (map #(convert-tree % kfn vfn) more-nodes))))))
-#_
+
 (defn- tree->parse-tree [tree-node]
   (convert-tree (read-string (.toString tree-node)) make-keyword name))
 
-#_
 (defn- tree->pos [tree-node]
   (->> (.taggedLabeledYield tree-node)
        (mapv #(vector (.word %) (make-keyword (.tag %))))
+       #_
        (merge (hash-map))))
-#_
-(defn- sentence-ann->token-based-result [result-class subkeys sentence-ann]
-  (->>
-       (.get sentence-ann)
-       (mapv #(make-token-based-operation-result result-class subkeys %))))
 
 (defrecord SentenceResult [tokens sentence])
 
 (defmulti execute-sentence-based-operation (fn [op-key & _] op-key))
+
+(defmethod execute-sentence-based-operation :parse [_ sentence-ann]
+  (let [tree-node (.get sentence-ann TreeCoreAnnotations$TreeAnnotation)]
+    ;; FIXME: not perfect!
+    {:tree (tree->parse-tree tree-node)
+     :dependency (.get sentence-ann SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation)}))
 
 (defmethod execute-sentence-based-operation :sentiment [_ sentence-ann]
   (. RNNCoreAnnotations getPredictedClass (.get sentence-ann SentimentCoreAnnotations$SentimentAnnotatedTree)))
@@ -234,10 +235,10 @@
 
 (defn- execute-sentence-based-operations [sentence-ann sentence-prototype sentence-ann-infos]
   ;; assume there is no operations dependency
-  (reduce (fn [result op-info]
-            (let [op-key (:key op-info)]
-              (assoc result op-key ((:result-converter op-info)
-                                    (execute-sentence-based-operation op-key sentence-ann)))))
+  (reduce (fn [result {:keys [key result-converter]}]
+            (assoc result key ((or result-converter
+                                   identity)
+                               (execute-sentence-based-operation key sentence-ann))))
           sentence-prototype
           sentence-ann-infos))
 
@@ -311,3 +312,4 @@
 ;; punct(Who-1, ?-4)
 ;; nil
 
+;;(analyse-text mary :sentiment :parse)

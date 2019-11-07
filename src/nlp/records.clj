@@ -58,7 +58,7 @@
                      [:ssplit nil ["tokenize"] nil nil]
                      [:pos :token ["tokenize" "ssplit"]
                       CoreAnnotations$PartOfSpeechAnnotation transform-pos-value]
-                     [:parse nil ["tokenize" "ssplit"] nil nil]
+                     [:parse :sentence ["tokenize" "ssplit"] nil nil]
                      [:lemma :token ["tokenize" "ssplit" "pos"]
                       CoreAnnotations$LemmaAnnotation transform-lemma-value]
                      [:regexner nil ["tokenize" "ssplit" "pos"] nil nil]
@@ -226,6 +226,6 @@
 ;;;
 ;;; Define result records
 ;;;
-(nlp-result-records [:ner :lemma :pos :tokenize :sentiment])
+(nlp-result-records [:ner :lemma :pos :tokenize :sentiment :parse])
 
 ;; (macroexpand '(nlp-result-records [:ner :lemma :pos :tokenize :sentiment]))
