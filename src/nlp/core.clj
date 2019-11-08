@@ -220,23 +220,7 @@
 
 (defmulti execute-sentence-based-operation (fn [op-key & _] op-key))
 
-#_
-(defn- semantic-graph->dependency [graph]
-  (cons (let [root (.getFirstRoot graph)]
-          {:root-target (.toString root) ;; governor
-           :root-target-index (.beginPosition root)})
-        (for [edge (.edgeIterable graph)
-              :let [source (.getSource edge)
-                    target (.getTarget edge)]]
-
-          {:source (.toString source) ;; governor
-           :source-index (.beginPosition source)
-           :target (.toString target) ;; dependent
-           :target-index (.beginPosition target)
-           :relation (.getLongName (.getRelation edge))
-           :extra? (.isExtra edge)})))
-
-(defn- semantic-graph->dependency [graph]
+(defn- semantic-graph->dependencies [graph]
   (for [dependency (.typedDependencies graph)
         :let [gov (.gov dependency)
               dep (.dep dependency)]]
@@ -254,7 +238,7 @@
     ;; https://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/semgraph/SemanticGraph.html
     {:tree (tree->parse-tree tree-node)
      :dependencies
-     (semantic-graph->dependency
+     (semantic-graph->dependencies
       (.get sentence-ann SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation))}))
 
 (defmethod execute-sentence-based-operation :sentiment [_ sentence-ann]
