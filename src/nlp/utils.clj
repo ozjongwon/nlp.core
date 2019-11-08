@@ -64,3 +64,40 @@
                                              position-groups)]
             (recur next-position-groups
                    (concat result (mapv #(multiple-nth col %) position-groups)))))))))
+
+;;;
+;;; strign -> sexp
+;;;
+(defn- ssexp->tokens [s idx]
+  (loop [start idx end idx tokens []]
+    (let [c (get s end)]
+      (case c
+        (\( \)) (let [paren-op (if (= c \() :lp :rp)]
+                  (if (= start end)
+                    [(conj tokens paren-op) (inc end)]
+                    [(conj tokens (subs s start end) paren-op) (inc end)]))
+        \space (if (= start end)
+                 (recur (inc start) (inc start) tokens)
+                 (recur (inc end) (inc end) (conj tokens (subs s start end))))
+        (recur start (inc end) tokens)))))
+
+(defn- compute-next-stack [tokens initial-stack]
+  (loop [[token & more-tokens] tokens
+         stack initial-stack]
+    (case token
+      nil stack
+      :rp (let [ip-index (.indexOf stack :lp)]
+            (recur more-tokens (conj (nthrest stack (inc ip-index))
+                                     (apply conj () (take ip-index stack)))))
+      (recur more-tokens (conj stack token)))))
+
+(defn str-sexp->sexp [s]
+  (let [max-index (count s)]
+    (loop [index 0 stack ()]
+      (if (<= max-index index)
+        (if (empty? (rest stack))
+          (first stack)
+          (throw (Throwable. "Unmatched parens!")))
+        (let [[tokens next-index] (ssexp->tokens s index) ]
+          (recur next-index (compute-next-stack tokens stack)))))))
+
