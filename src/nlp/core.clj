@@ -220,11 +220,42 @@
 
 (defmulti execute-sentence-based-operation (fn [op-key & _] op-key))
 
+#_
+(defn- semantic-graph->dependency [graph]
+  (cons (let [root (.getFirstRoot graph)]
+          {:root-target (.toString root) ;; governor
+           :root-target-index (.beginPosition root)})
+        (for [edge (.edgeIterable graph)
+              :let [source (.getSource edge)
+                    target (.getTarget edge)]]
+
+          {:source (.toString source) ;; governor
+           :source-index (.beginPosition source)
+           :target (.toString target) ;; dependent
+           :target-index (.beginPosition target)
+           :relation (.getLongName (.getRelation edge))
+           :extra? (.isExtra edge)})))
+
+(defn- semantic-graph->dependency [graph]
+  (for [dependency (.typedDependencies graph)
+        :let [gov (.gov dependency)
+              dep (.dep dependency)]]
+
+    {:governor (.toString gov)
+     :governor-index (.beginPosition gov)
+     :dependent (.toString dep)
+     ::dependent-index (.beginPosition dep)
+     :relation (.getLongName (.reln dependency))
+     :extra? (.extra dependency)}))
+
 (defmethod execute-sentence-based-operation :parse [_ sentence-ann]
   (let [tree-node (.get sentence-ann TreeCoreAnnotations$TreeAnnotation)]
     ;; FIXME: not perfect!
+    ;; https://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/semgraph/SemanticGraph.html
     {:tree (tree->parse-tree tree-node)
-     :dependency (.get sentence-ann SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation)}))
+     :dependencies
+     (semantic-graph->dependency
+      (.get sentence-ann SemanticGraphCoreAnnotations$EnhancedPlusPlusDependenciesAnnotation))}))
 
 (defmethod execute-sentence-based-operation :sentiment [_ sentence-ann]
   (. RNNCoreAnnotations getPredictedClass (.get sentence-ann SentimentCoreAnnotations$SentimentAnnotatedTree)))
