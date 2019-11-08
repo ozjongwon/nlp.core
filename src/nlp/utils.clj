@@ -81,23 +81,60 @@
                  (recur (inc end) (inc end) (conj tokens (subs s start end))))
         (recur start (inc end) tokens)))))
 
-(defn- compute-next-stack [tokens initial-stack]
+#_
+(defn- compute-next-stack [tokens initial-stack op-conv]
   (loop [[token & more-tokens] tokens
          stack initial-stack]
     (case token
       nil stack
-      :rp (let [ip-index (.indexOf stack :lp)]
-            (recur more-tokens (conj (nthrest stack (inc ip-index))
-                                     (apply conj () (take ip-index stack)))))
+      :rp (let [lp-index (.indexOf stack :lp)]
+            (println "***"
+                     lp-index
+                     stack
+                     (nthrest stack (inc lp-index))
+                     (apply conj () (take lp-index stack)))
+            (recur more-tokens (conj (nthrest stack (inc lp-index))
+                                     (apply conj () (take lp-index stack)))))
       (recur more-tokens (conj stack token)))))
 
-(defn str-sexp->sexp [s]
-  (let [max-index (count s)]
-    (loop [index 0 stack ()]
-      (if (<= max-index index)
-        (if (empty? (rest stack))
-          (first stack)
-          (throw (Throwable. "Unmatched parens!")))
-        (let [[tokens next-index] (ssexp->tokens s index) ]
-          (recur next-index (compute-next-stack tokens stack)))))))
+(defn- compute-next-stack [tokens initial-stack op-conv]
+  (loop [[token & more-tokens] tokens
+         stack initial-stack]
+    (case token
+      nil stack
+      :rp (let [lp-index (.indexOf stack :lp)]
+            (if (zero? lp-index)
+              (recur more-tokens (rest stack))
+              (recur more-tokens (conj (nthrest stack (inc lp-index))
+                                       (apply conj () (take lp-index stack))))))
+      (recur more-tokens (conj stack token)))))
+
+(defn- compute-next-stack [tokens initial-stack op-conv]
+  (loop [[token & more-tokens] tokens
+         stack initial-stack]
+    (case token
+      nil stack
+      :rp (let [lp-index (.indexOf stack :lp)]
+            (if (zero? lp-index)
+              (recur more-tokens (rest stack))
+              (let [sexp (apply conj () (take lp-index stack))]
+                (recur more-tokens (conj (nthrest stack (inc lp-index))
+                                         (if (list? sexp)
+                                           (cons (op-conv (first sexp))
+                                                 (rest sexp))
+                                           sexp))))))
+      (recur more-tokens (conj stack token)))))
+
+(defn str-sexp->sexp
+  ([s]
+   (str-sexp->sexp s identity))
+  ([s op-conv]
+   (let [max-index (count s)]
+     (loop [index 0 stack ()]
+       (if (<= max-index index)
+         (if (empty? (rest stack))
+           (first stack)
+           (throw (Throwable. "Unmatched parens!")))
+         (let [[tokens next-index] (ssexp->tokens s index) ]
+           (recur next-index (compute-next-stack tokens stack op-conv))))))))
 
