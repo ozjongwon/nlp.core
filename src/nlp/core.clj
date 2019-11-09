@@ -88,11 +88,12 @@
   (:require
    [clojure.string :refer [join]]
    [clojure.set :refer [intersection]]
-   [nlp.utils :refer [find-in-coll make-keyword atom?]]
+   [nlp.utils :refer [find-in-coll make-keyword atom? str-sexp->sexp]]
    [nlp.records :refer [make-token-based-operation-result result-class->prototype
-                        token-ann->token-map
+                        token-ann->token-map special-token-map
                         operation-keys->result-record prototype->make-token-based-operation-result
                         key->property-dependency annotators-keys->op-dispatch-set]]
+   [camel-snake-kebab.core :refer [->kebab-case-keyword]]
    [medley.core :refer [find-first
                         ;;assoc-some
                         ]])
@@ -126,7 +127,6 @@
    [edu.stanford.nlp.neural.rnn RNNCoreAnnotations]
 
    [edu.stanford.nlp.coref CorefCoreAnnotations$CorefChainAnnotation]
-   ;; [edu.stanford.nlp.dcoref CorefCoreAnnotations$CorefChainAnnotation]
    [edu.stanford.nlp.pipeline Annotation StanfordCoreNLP CoreDocument]
 
    [edu.stanford.nlp.tagger.maxent MaxentTagger]
@@ -194,21 +194,13 @@
          new-core-nlp)))))
 
 ;; :parse
-
-(defn convert-tree
-  ([tr kfn]
-   (convert-tree tr kfn identity))
-  ([[k v & more-nodes] kfn vfn]
-   (if (nil? k)
-     nil
-     (cons (kfn k)
-           (cons (if (atom? v)
-                   (vfn v)
-                   (convert-tree v kfn vfn))
-                 (map #(convert-tree % kfn vfn) more-nodes))))))
+(defn- parse-tree-key-converter [v]
+  (if-let [special-v (get special-token-map v)]
+    special-v
+    (make-keyword v)))
 
 (defn- tree->parse-tree [tree-node]
-  (convert-tree (read-string (.toString tree-node)) make-keyword name))
+  (str-sexp->sexp (.toString tree-node) parse-tree-key-converter))
 
 (defn- tree->pos [tree-node]
   (->> (.taggedLabeledYield tree-node)
@@ -216,20 +208,63 @@
        #_
        (merge (hash-map))))
 
-(defrecord SentenceResult [tokens sentence])
+(defrecord SentenceResult [sentence tokens])
+(defrecord DocumentResult [document sentences])
+
+
+(defrecord Mention [context type start end])
+(defn make-mention [mention]
+  (->Mention (.toString mention)
+             (.name (.mentionType mention))
+             (.startIndex mention)
+             (.endIndex mention)))
+
+(defrecord Cluster [id mention-span gender mentions])
+(defn make-cluster [coref-chain]
+  (let [mention (.getRepresentativeMention coref-chain)
+        mention-span (.mentionSpan mention)
+        mentions (.getMentionsInTextualOrder coref-chain)]
+    (->Cluster (.getChainID coref-chain)
+               mention-span
+               (.name (.gender mention))
+               (mapv make-mention (.getMentionsInTextualOrder coref-chain)))))
+
+(defmulti execute-document-based-operation (fn [op-key & _] op-key))
+
+(defmethod execute-document-based-operation :coref [_ doc-ann]
+  (let [x (.get doc-ann CorefCoreAnnotations$CorefChainAnnotation)
+        v (.values x)]
+    (mapv make-cluster v))
+  #_
+  (->>  (.get sentence-ann CorefCoreAnnotations$CorefChainAnnotation)
+        (.values)
+        (mapv make-cluster)))
+
+(defn execute-document-based-operations [ann document-prototype document-infos]
+  ;; assume there is no operations dependency
+  (reduce (fn [result {:keys [key result-converter]}]
+            (assoc result key ((or result-converter
+                                   identity)
+                               (execute-document-based-operation key ann))))
+          document-prototype
+          document-infos))
 
 (defmulti execute-sentence-based-operation (fn [op-key & _] op-key))
+
+(defn split-word+role [word+role]
+  (let [[word role] (clojure.string/split word+role #"/" )]
+    [word (when role  (make-keyword role))]))
 
 (defn- semantic-graph->dependencies [graph]
   (for [dependency (.typedDependencies graph)
         :let [gov (.gov dependency)
               dep (.dep dependency)]]
 
-    {:governor (.toString gov)
+    {:governor (split-word+role (.toString gov))
      :governor-index (.beginPosition gov)
-     :dependent (.toString dep)
-     ::dependent-index (.beginPosition dep)
-     :relation (.getLongName (.reln dependency))
+     :dependent (split-word+role (.toString dep))
+     :dependent-index (.beginPosition dep)
+     :relation (->kebab-case-keyword (.getLongName (.reln dependency)))
      :extra? (.extra dependency)}))
 
 (defmethod execute-sentence-based-operation :parse [_ sentence-ann]
@@ -248,25 +283,32 @@
   (-> (operation-keys->result-record (mapv :key annotation-infos))
       (result-class->prototype)))
 
-(defn- execute-sentence-based-operations [sentence-ann sentence-prototype sentence-ann-infos]
+(defn- execute-sentence-based-operations [sentence-ann sentence-prototype sentence-infos]
   ;; assume there is no operations dependency
   (reduce (fn [result {:keys [key result-converter]}]
             (assoc result key ((or result-converter
                                    identity)
                                (execute-sentence-based-operation key sentence-ann))))
           sentence-prototype
-          sentence-ann-infos))
+          sentence-infos))
 
-(defn execute-annotation-operations [ann {:keys [token sentence]}]
-  (let [token-prototype (and token (annotation-infos->prototype token))
-        sentence-prototype (and sentence (annotation-infos->prototype sentence))]
+(defn execute-sentence-operations [ann sentence-infos token-infos]
+  (let [token-prototype (and token-infos (annotation-infos->prototype token-infos))
+        sentence-prototype (and sentence-infos (annotation-infos->prototype sentence-infos))]
     (mapv (fn [sentence-ann]
-            (->SentenceResult (when token-prototype
+            (->SentenceResult (when sentence-prototype
+                                (execute-sentence-based-operations sentence-ann sentence-prototype sentence-infos))
+                              (when token-prototype
                                 (mapv #(prototype->make-token-based-operation-result token-prototype %)
-                                      (.get sentence-ann CoreAnnotations$TokensAnnotation)))
-                              (when sentence-prototype
-                                (execute-sentence-based-operations sentence-ann sentence-prototype sentence))))
+                                      (.get sentence-ann CoreAnnotations$TokensAnnotation)))))
           (.get ann CoreAnnotations$SentencesAnnotation))))
+
+(defn execute-annotation-operations [ann {:keys [document sentence token]}]
+  (let [document-prototype (and document (annotation-infos->prototype document))
+        sentence-prototype (and sentence (annotation-infos->prototype sentence))
+        token-prototype (and token (annotation-infos->prototype token))]
+    (->DocumentResult (execute-document-based-operations ann document-prototype document) ;; document
+                      (execute-sentence-operations ann sentence token))))
 
 ;; :lemma
 (def lemma-paragraph "Similar to stemming is Lemmatization. This is the process of finding its lemma, its form as found in a dictionary.")

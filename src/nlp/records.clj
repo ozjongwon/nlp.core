@@ -34,6 +34,7 @@
                             "..." :ellipsis-points
                             ":" :colon
                             "," :comma
+                            "$" :currency
                             })
 
 (defn- transform-ner-value [ner-val]
@@ -68,8 +69,8 @@
                      [:entitylink nil ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
                      [:sentiment :sentence ["tokenize" "ssplit" "pos" "parse"] nil
                       transform-sentiment-value]
-                     [:dcoref nil ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
-                     [:coref nil ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
+                     [:dcoref :document ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
+                     [:coref :document ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
                      [:kbp nil ["tokenize" "ssplit" "pos" "lemma"] nil nil]
                      [:quote nil ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"] nil nil]])]
     (zipmap (mapv :key infov) infov)))
@@ -202,11 +203,11 @@
                 kset]]))
           kset-list)))
 
-(defn define-sentence-based-records [sentence-info-set]
+(defn define-document-or-sentence-based-records [info-set]
   (mapv (fn [[record-symbol record-slots]]
           (when (and record-symbol record-slots)
             `(defrecord ~record-symbol [~@record-slots])))
-        (info-set->base-records-parts sentence-info-set)))
+        (info-set->base-records-parts info-set)))
 
 (defn define-token-based-records [token-info-set]
   (mapv (fn [[record-symbol record-slots kset]]
@@ -218,14 +219,15 @@
 (defmacro nlp-result-records [ks]
   ;; 1. define sentence based records
   ;; 2. define token based records
-  (let [{:keys [token sentence]} (annotators-keys->op-dispatch-set ks)]
+  (let [{:keys [document sentence token]} (annotators-keys->op-dispatch-set ks)]
    `(do
-      ~@(define-sentence-based-records sentence)
+      ~@(define-document-or-sentence-based-records document)
+      ~@(define-document-or-sentence-based-records sentence)
       ~@(define-token-based-records token))))
 
 ;;;
 ;;; Define result records
 ;;;
-(nlp-result-records [:ner :lemma :pos :tokenize :sentiment :parse])
+(nlp-result-records [:ner :lemma :pos :tokenize :sentiment :parse :dcoref :coref])
 
 ;; (macroexpand '(nlp-result-records [:ner :lemma :pos :tokenize :sentiment]))
