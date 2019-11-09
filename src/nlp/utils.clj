@@ -81,34 +81,6 @@
                  (recur (inc end) (inc end) (conj tokens (subs s start end))))
         (recur start (inc end) tokens)))))
 
-#_
-(defn- compute-next-stack [tokens initial-stack op-conv]
-  (loop [[token & more-tokens] tokens
-         stack initial-stack]
-    (case token
-      nil stack
-      :rp (let [lp-index (.indexOf stack :lp)]
-            (println "***"
-                     lp-index
-                     stack
-                     (nthrest stack (inc lp-index))
-                     (apply conj () (take lp-index stack)))
-            (recur more-tokens (conj (nthrest stack (inc lp-index))
-                                     (apply conj () (take lp-index stack)))))
-      (recur more-tokens (conj stack token)))))
-
-(defn- compute-next-stack [tokens initial-stack op-conv]
-  (loop [[token & more-tokens] tokens
-         stack initial-stack]
-    (case token
-      nil stack
-      :rp (let [lp-index (.indexOf stack :lp)]
-            (if (zero? lp-index)
-              (recur more-tokens (rest stack))
-              (recur more-tokens (conj (nthrest stack (inc lp-index))
-                                       (apply conj () (take lp-index stack))))))
-      (recur more-tokens (conj stack token)))))
-
 (defn- compute-next-stack [tokens initial-stack op-conv]
   (loop [[token & more-tokens] tokens
          stack initial-stack]
@@ -119,10 +91,7 @@
               (recur more-tokens (rest stack))
               (let [sexp (apply conj () (take lp-index stack))]
                 (recur more-tokens (conj (nthrest stack (inc lp-index))
-                                         (if (list? sexp)
-                                           (cons (op-conv (first sexp))
-                                                 (rest sexp))
-                                           sexp))))))
+                                         (cons (op-conv (first sexp)) (rest sexp)))))))
       (recur more-tokens (conj stack token)))))
 
 (defn str-sexp->sexp
