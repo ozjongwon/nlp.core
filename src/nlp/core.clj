@@ -267,10 +267,16 @@
 
 (defmulti execute-document-based-operation (fn [op-key & _] op-key))
 
-(defmethod execute-document-based-operation :coref [_ doc-ann]
+(defn- execute-coref [doc-ann]
   (->>  (.get doc-ann CorefCoreAnnotations$CorefChainAnnotation)
         (.values)
         (mapv make-coref-chain)))
+
+(defmethod execute-document-based-operation :coref [_ doc-ann]
+  (execute-coref doc-ann))
+
+(defmethod execute-document-based-operation :dcoref [_ doc-ann]
+  (execute-coref doc-ann))
 
 (defn execute-document-based-operations [ann document-prototype document-infos]
   ;; assume there is no operations dependency
@@ -362,6 +368,9 @@
 (def sam "Sam was an odd sort of fellow. Not prone to angry and not prone to merriment. Overall, an odd fellow.")
 
 (def mary  "Mary thought that custard pie was the best pie in the world. However, she loathed chocolate pie.")
+(def coref1 "He took his cash and she took her change and together they bought their lunch.")
+(def coref2 "Mary felt the earthquake. It shook the entire building. As she sat there, Mary felt the earthquake.")
+(def coref3 "Who is the 32nd president of the United States?")
 
 ;;;
 ;;; Main function
@@ -373,6 +382,8 @@
     (execute-annotation-operations annotation (annotators-keys->op-dispatch-set annotators-keys))))
 
 (defonce paragraph "Let's pause, and then reflect.")
+
+(def pipe-ex "The robber took the cash and ran. The policeman chased him down the street. A passerby, watching the action, tripped the thief as he passed by. They all lived happily ever after, except for the thief of course.")
 
 ;; (.prettyPrint pipeline annotation *out*)
 

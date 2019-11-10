@@ -69,8 +69,8 @@
                      [:entitylink nil ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
                      [:sentiment :sentence ["tokenize" "ssplit" "pos" "parse"] nil
                       transform-sentiment-value]
-                     ;; [:dcoref :document ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
-                     [:coref :document ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
+                     [:dcoref :document ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
+                     [:coref :document ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
                      [:kbp nil ["tokenize" "ssplit" "pos" "lemma"] nil nil]
                      [:quote nil ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"] nil nil]])]
     (zipmap (mapv :key infov) infov)))
@@ -100,10 +100,9 @@
 
 (defn token-ann->token-map [token-ann]
   {:token (token-ann->token token-ann) ;;(.word token-ann)
-   ;; :begin (.get token-ann CoreAnnotations$TokenBeginAnnotation)
-   ;; :end (.get token-ann CoreAnnotations$TokenEndAnnotation)
-   :begin (.beginPosition token-ann)
-   :end (.endPosition token-ann)})
+   ;;:begin (.beginPosition token-ann)
+   ;;:end (.endPosition token-ann)
+   })
 
 ;;;
 ;;; Design Idea
@@ -121,7 +120,8 @@
 ;;; entitylink - TBD
 ;;; sentiment - TBD
 ;;; dcoref - 'coref' seems better, don't use
-;;; coref - TBD
+;;; coref - coref
+;;; https://stanfordnlp.github.io/CoreNLP/coref.html#description
 ;;; kbp - TBD
 ;;; quote - TBD
 ;;;
@@ -142,7 +142,7 @@
   (prototype->make-token-based-operation-result (result-class->prototype proto-class) token-ann))
 
 ;;; Tokenize records
-(defrecord TokenizeResult [token begin end]
+(defrecord TokenizeResult [token]
   OperationResult
   (prototype->make-token-based-operation-result [this token-ann]
     (merge this (token-ann->token-map token-ann))))
@@ -229,6 +229,6 @@
 ;;;
 ;;; Define result records
 ;;;
-(nlp-result-records [:ner :lemma :pos :tokenize :sentiment :parse #_ :dcoref :coref])
+(nlp-result-records [:ner :lemma :pos :tokenize :sentiment :parse :dcoref :coref])
 
 ;; (macroexpand '(nlp-result-records [:ner :lemma :pos :tokenize :sentiment]))
