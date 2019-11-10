@@ -211,34 +211,59 @@
 (defrecord SentenceResult [sentence tokens])
 (defrecord DocumentResult [document sentences])
 
+(defn named->keyword [named]
+  (make-keyword (.name named)))
 
-(defrecord Mention [context type start end])
-(defn make-mention [mention]
-  (->Mention (.toString mention)
-             (.name (.mentionType mention))
-             (.startIndex mention)
-             (.endIndex mention)))
+(defrecord Mention [name type position]) ;; s(entence)id, m(ention)id
+(defn make-mention [main-mention-position mention]
+  (let [position [(.sentNum mention) (.headIndex mention)]]
+    (when-not (= position main-mention-position)
+      (->Mention (.mentionSpan mention)
+                 (.name (.mentionType mention))
+                 position
+                 ;; (named->keyword (.animacy mention))
+                 ;; (named->keyword (.gender mention))
 
-(defrecord Cluster [id mention-span gender mentions])
-(defn make-cluster [coref-chain]
+                 ;; (.startIndex mention)
+                 ;; (.endIndex mention)
+                 ))))
+
+(defrecord CorefChain [id position span animacy gender mentions])
+(defn make-coref-chain [coref-chain]
+  ;; https://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/dcoref/CorefChain.html
+  ;; Each CorefChain represents a set of mentions in the text which should all correspond to
+  ;; the same actual entity.
+  ;; There is a representative mention, which stores the best mention of an entity,
+  ;; and then there is a List of all mentions that are coreferent with that mention.
+  ;; The mentionMap maps from pairs of a sentence number and a head word index to a CorefMention.
+  ;; The chainID is an arbitrary integer for the chain number.
   (let [mention (.getRepresentativeMention coref-chain)
-        mention-span (.mentionSpan mention)
-        mentions (.getMentionsInTextualOrder coref-chain)]
-    (->Cluster (.getChainID coref-chain)
-               mention-span
-               (.name (.gender mention))
-               (mapv make-mention (.getMentionsInTextualOrder coref-chain)))))
+        position  [(.sentNum mention) (.headIndex mention)]]
+    ;; (.sentNum mention)   ;; sentence number
+    ;; (.headIndex mention) ;; mention number in the sentence
+    ;; (.gender mention)    ;; gender
+    ;; (.animacy mention)   ;; animal or not
+    ;;
+    (->CorefChain (.getChainID coref-chain)
+                  position
+                  (.mentionSpan mention)
+                  (named->keyword (.animacy mention))
+                  (named->keyword (.gender mention))
+                  (for [mdefs (.getMentionsInTextualOrder coref-chain)
+                        :let [mention (make-mention position mdefs)]
+                        :when mention]
+                    mention))))
 
 (defmulti execute-document-based-operation (fn [op-key & _] op-key))
 
 (defmethod execute-document-based-operation :coref [_ doc-ann]
   (let [x (.get doc-ann CorefCoreAnnotations$CorefChainAnnotation)
         v (.values x)]
-    (mapv make-cluster v))
+    (mapv make-coref-chain v))
   #_
   (->>  (.get sentence-ann CorefCoreAnnotations$CorefChainAnnotation)
         (.values)
-        (mapv make-cluster)))
+        (mapv make-coref-chain)))
 
 (defn execute-document-based-operations [ann document-prototype document-infos]
   ;; assume there is no operations dependency
