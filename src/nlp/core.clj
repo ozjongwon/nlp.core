@@ -204,9 +204,7 @@
 
 (defn- tree->pos [tree-node]
   (->> (.taggedLabeledYield tree-node)
-       (mapv #(vector (.word %) (make-keyword (.tag %))))
-       #_
-       (merge (hash-map))))
+       (mapv #(vector (.word %) (make-keyword (.tag %))))))
 
 (defrecord SentenceResult [sentence tokens])
 (defrecord DocumentResult [document sentences])
@@ -270,11 +268,6 @@
 (defmulti execute-document-based-operation (fn [op-key & _] op-key))
 
 (defmethod execute-document-based-operation :coref [_ doc-ann]
-  #_
-  (let [x (.get doc-ann CorefCoreAnnotations$CorefChainAnnotation)
-        v (.values x)]
-    (mapv make-coref-chain v))
-
   (->>  (.get doc-ann CorefCoreAnnotations$CorefChainAnnotation)
         (.values)
         (mapv make-coref-chain)))

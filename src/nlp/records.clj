@@ -69,7 +69,7 @@
                      [:entitylink nil ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
                      [:sentiment :sentence ["tokenize" "ssplit" "pos" "parse"] nil
                       transform-sentiment-value]
-                     [:dcoref :document ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
+                     ;; [:dcoref :document ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
                      [:coref :document ["tokenize" "ssplit" "pos" "lemma"  "ner"] nil nil]
                      [:kbp nil ["tokenize" "ssplit" "pos" "lemma"] nil nil]
                      [:quote nil ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"] nil nil]])]
@@ -120,7 +120,7 @@
 ;;; ner - tokenize properties or lemma properties + ner
 ;;; entitylink - TBD
 ;;; sentiment - TBD
-;;; dcoref - TBD
+;;; dcoref - 'coref' seems better, don't use
 ;;; coref - TBD
 ;;; kbp - TBD
 ;;; quote - TBD
@@ -229,6 +229,6 @@
 ;;;
 ;;; Define result records
 ;;;
-(nlp-result-records [:ner :lemma :pos :tokenize :sentiment :parse :dcoref :coref])
+(nlp-result-records [:ner :lemma :pos :tokenize :sentiment :parse #_ :dcoref :coref])
 
 ;; (macroexpand '(nlp-result-records [:ner :lemma :pos :tokenize :sentiment]))
