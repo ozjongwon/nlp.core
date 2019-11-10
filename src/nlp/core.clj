@@ -215,11 +215,23 @@
   (make-keyword (.name named)))
 
 (defrecord Mention [name type position]) ;; s(entence)id, m(ention)id
+;;;
+;;; How to get a token from a position - sentence + token-index ??
+;;; - include :tokenize to run analyse-text
+;;; - get proper tokens from sentences using the sentence number
+;;; - get proper token from the tokens
+;;;
+(defn mention-position->token [result [sentence-index token-index]]
+  (->  (:sentences result)
+       (nth (dec sentence-index))
+       (:tokens)
+      (nth  (dec token-index))))
+
 (defn make-mention [main-mention-position mention]
   (let [position [(.sentNum mention) (.headIndex mention)]]
     (when-not (= position main-mention-position)
       (->Mention (.mentionSpan mention)
-                 (.name (.mentionType mention))
+                 (named->keyword (.mentionType mention))
                  position
                  ;; (named->keyword (.animacy mention))
                  ;; (named->keyword (.gender mention))
@@ -228,7 +240,7 @@
                  ;; (.endIndex mention)
                  ))))
 
-(defrecord CorefChain [id position span animacy gender mentions])
+(defrecord CorefChain [id position span type animacy gender mentions])
 (defn make-coref-chain [coref-chain]
   ;; https://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/dcoref/CorefChain.html
   ;; Each CorefChain represents a set of mentions in the text which should all correspond to
@@ -247,6 +259,7 @@
     (->CorefChain (.getChainID coref-chain)
                   position
                   (.mentionSpan mention)
+                  (named->keyword (.mentionType mention))
                   (named->keyword (.animacy mention))
                   (named->keyword (.gender mention))
                   (for [mdefs (.getMentionsInTextualOrder coref-chain)
@@ -257,11 +270,12 @@
 (defmulti execute-document-based-operation (fn [op-key & _] op-key))
 
 (defmethod execute-document-based-operation :coref [_ doc-ann]
+  #_
   (let [x (.get doc-ann CorefCoreAnnotations$CorefChainAnnotation)
         v (.values x)]
     (mapv make-coref-chain v))
-  #_
-  (->>  (.get sentence-ann CorefCoreAnnotations$CorefChainAnnotation)
+
+  (->>  (.get doc-ann CorefCoreAnnotations$CorefChainAnnotation)
         (.values)
         (mapv make-coref-chain)))
 

@@ -100,9 +100,10 @@
 
 (defn token-ann->token-map [token-ann]
   {:token (token-ann->token token-ann) ;;(.word token-ann)
-   :begin (.get token-ann CoreAnnotations$TokenBeginAnnotation) ;;(.beginPosition token-ann)
-   :end (.get token-ann CoreAnnotations$TokenEndAnnotation) ;;(.endPosition token-ann)
-   })
+   ;; :begin (.get token-ann CoreAnnotations$TokenBeginAnnotation)
+   ;; :end (.get token-ann CoreAnnotations$TokenEndAnnotation)
+   :begin (.beginPosition token-ann)
+   :end (.endPosition token-ann)})
 
 ;;;
 ;;; Design Idea
