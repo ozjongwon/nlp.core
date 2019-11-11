@@ -62,6 +62,7 @@
                      [:parse :sentence ["tokenize" "ssplit"] nil nil]
                      [:lemma :token ["tokenize" "ssplit" "pos"]
                       CoreAnnotations$LemmaAnnotation transform-lemma-value]
+                     ;; https://stanfordnlp.github.io/CoreNLP/regexner.html
                      [:regexner nil ["tokenize" "ssplit" "pos"] nil nil]
                      [:depparse nil ["tokenize" "ssplit" "pos"] nil nil]
                      [:ner :token ["tokenize" "ssplit" "pos" "lemma"]
@@ -71,6 +72,7 @@
                       transform-sentiment-value]
                      [:dcoref :document ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
                      [:coref :document ["tokenize" "ssplit" "pos" "lemma"  "ner" "parse"] nil nil]
+                     ;; https://stanfordnlp.github.io/CoreNLP/kbp.html
                      [:kbp nil ["tokenize" "ssplit" "pos" "lemma"] nil nil]
                      [:quote nil ["tokenize" "ssplit" "pos" "lemma" "ner" "depparse"] nil nil]])]
     (zipmap (mapv :key infov) infov)))
