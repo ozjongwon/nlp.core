@@ -413,3 +413,4 @@
 ;; nil
 
 ;;(analyse-text mary :sentiment :parse)
+(def item1 "The basic principles of contract law are discussed in this chapter. These apply to purely commercial transactions (such as between a manufacturing business and its supplier), as well as transactions where one of the parties is a consumer (a consumer is a person who acquires goods or services for personal or household use). Contract law provides a framework to help resolve disputes and enforce rights and obligations. It supports economic growth by giving individuals and businesses the predictability and confidence to trade, associate and invest.")
