@@ -22,6 +22,6 @@ Internally it uses Annotation Pipeline and currently supports:
 
 ## License
 
-Copyright © 2019 Jong-won Choi<oz.jongwon.choi@gmail.com>
+Copyright © 2019 Jong-won Choi
 
 Distributed under the MIT License. See LICENSE for details.
