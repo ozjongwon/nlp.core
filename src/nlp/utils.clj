@@ -1,9 +1,8 @@
 (ns nlp.utils
-  (:require
-   [clojure.string :refer [lower-case capitalize]]
-   [clojure.reflect :refer [type-reflect]]
-   [medley.core :refer [find-first]]
-   [camel-snake-kebab.core :refer [->kebab-case-keyword]]))
+  (:require [camel-snake-kebab.core :refer [->kebab-case-keyword]]
+            [clojure.reflect :refer [type-reflect]]
+            [clojure.string :refer [lower-case capitalize]]
+            [medley.core :refer [find-first]]))
 
 ;;;
 ;;; Useful functions
@@ -68,17 +67,18 @@
 ;;;
 ;;; strign -> sexp
 ;;;
+
 (defn- ssexp->tokens [s idx]
   (loop [start idx end idx tokens []]
     (let [c (get s end)]
       (case c
-        (\( \)) (let [paren-op (if (= c \() :lp :rp)]
-                  (if (= start end)
-                    [(conj tokens paren-op) (inc end)]
-                    [(conj tokens (subs s start end) paren-op) (inc end)]))
-        \space (if (= start end)
-                 (recur (inc start) (inc start) tokens)
-                 (recur (inc end) (inc end) (conj tokens (subs s start end))))
+        (\( \)) [(if (= start end)
+                   (conj tokens c)
+                   (conj tokens (subs s start end) c))
+                 (inc end)]
+        \space (recur (inc end) (inc end) (if (= start end)
+                                            tokens
+                                            (conj tokens (subs s start end))))
         (recur start (inc end) tokens)))))
 
 (defn- compute-next-stack [tokens initial-stack op-conv]
@@ -86,7 +86,7 @@
          stack initial-stack]
     (case token
       nil stack
-      :rp (let [lp-index (.indexOf stack :lp)]
+      \) (let [lp-index (.indexOf ^clojure.lang.PersistentList stack \()]
             (if (zero? lp-index)
               (recur more-tokens (rest stack))
               (let [sexp (apply conj () (take lp-index stack))]
