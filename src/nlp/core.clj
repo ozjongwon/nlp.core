@@ -414,3 +414,25 @@
 
 ;;(analyse-text mary :sentiment :parse)
 (def item1 "The basic principles of contract law are discussed in this chapter. These apply to purely commercial transactions (such as between a manufacturing business and its supplier), as well as transactions where one of the parties is a consumer (a consumer is a person who acquires goods or services for personal or household use). Contract law provides a framework to help resolve disputes and enforce rights and obligations. It supports economic growth by giving individuals and businesses the predictability and confidence to trade, associate and invest.")
+
+(def law1 "(1) An employer must not request or require an employee to work more than the following number of hours in a week unless the additional hours are reasonable:
+(a) for a full-time employee—38 hours; or
+(b) for an employee who is not a full-time employee—the lesser of:
+(i) 38 hours; and
+(ii) the employee’s ordinary hours of work in a week.
+Employee may refuse to work unreasonable additional hours
+
+(2) The employee may refuse to work additional hours (beyond those referred to in paragraph (1)(a) or (b)) if they are unreasonable.
+Determining whether additional hours are reasonable")
+
+(def law2 "1. An employer must not request or require an employee to work more than the following number of hours in a week unless the additional hours are reasonable:
+1-1. for a full-time employee—38 hours; or
+1-2. for an employee who is not a full-time employee—the lesser of:
+1-2-1. 38 hours; and
+1-2-2. the employee’s ordinary hours of work in a week.
+Employee may refuse to work unreasonable additional hours
+
+2. The employee may refuse to work additional hours (beyond those referred to in paragraph 1-1 or 1-2) if they are unreasonable.
+Determining whether additional hours are reasonable")
+
+(def law3 "Suppliers must demonstrate , fairness and courtesy , objectivity , and efficiency by Acknowledging a Complaint within 2 Working Days of receipt where the Complaint is made by email .")
