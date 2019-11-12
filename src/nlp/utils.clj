@@ -65,7 +65,7 @@
                    (concat result (mapv #(multiple-nth col %) position-groups)))))))))
 
 ;;;
-;;; strign -> sexp
+;;; string -> sexp
 ;;;
 
 (defn- ssexp->tokens [s idx]
